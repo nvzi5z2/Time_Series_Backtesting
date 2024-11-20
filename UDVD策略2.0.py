@@ -3,6 +3,11 @@ import pandas as pd
 import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
+from itertools import product
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 def UDVD(target_assets, paths,window_1=34):
     #信号结果字典
@@ -143,7 +148,7 @@ class UDVD_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -169,6 +174,8 @@ def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0002, slip
     
     strategies = cerebro.run()  # 运行回测
     return strategies[0]
+
+
 
 #加载分析工具
 AT=Analyzing_Tools()
@@ -198,19 +205,118 @@ strategy_results,full_info = UDVD(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_Strategy,target_assets,10000000)
+strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000)
 
 pv=strat.get_net_value_series()
 
-portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
+# portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
+# AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
 #蒙特卡洛测试
 
-AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
+
+
+#定义参数优化函数
+def parameter_optimization(parameter_grid, strategy_function, strategy_class, target_assets, paths, cash=100000.0, commission=0.0002, slippage_perc=0.0005, metric='sharpe_ratio'):   
+    """
+    执行参数优化，支持一个或两个参数。
+
+    参数：
+    - parameter_grid: 字典，包含参数名称和要测试的取值列表。例如：{'window_1': [30, 34, 38]}
+    - strategy_function: 生成信号的策略函数，例如 UDVD
+    - strategy_class: Backtrader 策略类，例如 UDVD_Strategy
+    - target_assets: 资产列表
+    - paths: 数据路径字典
+    - cash: 初始资金
+    - commission: 佣金
+    - slippage_perc: 滑点百分比
+    - metric: 选择用于评估的绩效指标，默认为 'sharpe_ratio'
+    """
+
+    #加载数据类
+
+    # 获取参数名称和取值列表
+    param_names = list(parameter_grid.keys())
+    param_values = [parameter_grid[key] for key in param_names]
+
+    # 生成所有参数组合
+    param_combinations = [dict(zip(param_names, values)) for values in product(*param_values)]
+
+    results = []
+
+    for params in param_combinations:
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
+
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+
+        # 获取净值序列
+        pv = strat.get_net_value_series()
+
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        results.append(result_entry)
+
+    # 将结果转换为 DataFrame
+    results_df = pd.DataFrame(results)
+
+    # 可视化结果
+    if len(param_names) == 1:
+        # 绘制参数与绩效指标的关系曲线
+        param = param_names[0]
+        plt.figure(figsize=(10, 6))
+        plt.plot(results_df[param], results_df[metric], marker='o')
+        plt.xlabel(param)
+        plt.ylabel(metric)
+        plt.title(f'{metric} vs {param}')
+        plt.grid(True)
+        plt.show()
+    elif len(param_names) == 2:
+        # 绘制热力图
+        param1 = param_names[0]
+        param2 = param_names[1]
+        pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+        plt.title(f'{metric} Heatmap')
+        plt.ylabel(param1)
+        plt.xlabel(param2)
+        plt.show()
+    else:
+        print("无法可视化超过两个参数的结果，请减少参数数量。")
+
+    # 返回结果 DataFrame
+    return results_df
+
+
+# 定义参数网格
+parameter_grid = {
+    'window_1': range(10, 100, 2),
+}
+
+# 运行参数优化
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=UDVD,
+    strategy_class=UDVD_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0002,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)

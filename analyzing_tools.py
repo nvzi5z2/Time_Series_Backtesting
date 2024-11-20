@@ -155,93 +155,6 @@ class Analyzing_Tools():
         # 显示所有图表和绩效分析结果
         show(column(p_comparison, p, p_value, p_drawdown, p_returns_hist, p_weekly_returns_hist, p_monthly_returns_hist, p_cum_returns, perf_div))
 
-    # def performance_analysis(self,strat, asset_data, freq='D'):
-    #     # 获取策略的净值序列
-    #     portfolio_value = strat.get_net_value_series()
-    #     # 将净值序列与基础资产数据对齐
-    #     portfolio_value = portfolio_value.reindex(asset_data.index).ffill().dropna()
-        
-    #     # 计算收益率
-    #     returns = portfolio_value.pct_change().dropna()
-
-    #     # 确定年化系数
-    #     if freq == 'D':
-    #         annual_factor = 252  # 你可以调整为252，如果更适合你的数据
-    #     elif freq == 'H' or freq == '1H':
-    #         annual_factor = 252 * 4  # 每天24小时
-    #     elif freq == '30m':
-    #         annual_factor = 252 * 4 * 2  # 每小时2个30分钟
-    #     elif freq == '15m':
-    #         annual_factor = 252 * 4 * 4  # 每小时4个15分钟
-    #     elif freq == '5m':
-    #         annual_factor = 252 * 4 * 12  # 每小时12个5分钟
-    #     elif freq == '1m':
-    #         annual_factor = 252 * 4 * 60  # 每小时60个1分钟
-    #     elif freq == '2H':
-    #         annual_factor = 252 * 2  # 每天12个2小时
-    #     elif freq == '4H':
-    #         annual_factor = 252 * 1  # 每天6个4小时
-
-    #     else:
-    #         raise ValueError("Unsupported frequency")
-
-    #     # 计算各项绩效指标
-    #     total_return = ep.cum_returns_final(returns)  # 总收益率
-    #     periods = len(returns)  # 总周期数
-
-    #     # 手动计算年化波动率和年化收益率
-    #     annual_volatility = returns.std() * np.sqrt(annual_factor)
-    #     annual_return = (1 + total_return) ** (annual_factor / periods) - 1
-
-    #     # 计算最大回撤
-    #     max_drawdown = ep.max_drawdown(returns)
-
-    #     # 手动计算卡尔马比率
-    #     calmar_ratio = annual_return / abs(max_drawdown) if max_drawdown != 0 else np.nan
-
-    #     # 计算夏普比率
-    #     sharpe_ratio = annual_return / annual_volatility
-
-    #     # 计算胜率
-    #     win_rate = (returns >= 0).sum() / len(returns)  # 胜率
-
-    #     # 计算下行标准差（只考虑负收益）
-    #     downside_returns = returns[returns < 0]
-    #     downside_std = downside_returns.std() * np.sqrt(annual_factor)
-
-    #     # 计算索提诺比率
-    #     sortino_ratio = annual_return / downside_std if downside_std != 0 else np.nan
-
-    #     # 计算回撤时间序列
-    #     cumulative_returns = ep.cum_returns(returns, starting_value=1)
-    #     running_max = cumulative_returns.cummax()
-    #     drawdown_ts = (cumulative_returns - running_max) / running_max
-
-    #     # 计算最大恢复时间
-    #     max_time_to_recovery = 0
-    #     recovery_start = None
-    #     for date in drawdown_ts.index:
-    #         if drawdown_ts[date] < 0:
-    #             if recovery_start is None:
-    #                 recovery_start = date
-    #         elif recovery_start is not None:
-    #             recovery_time = (date - recovery_start).days
-    #             max_time_to_recovery = max(max_time_to_recovery, recovery_time)
-    #             recovery_start = None
-
-    #     return portfolio_value, returns, drawdown_ts, {
-    #         'total_return': total_return,
-    #         'periods': periods,
-    #         'annual_volatility': annual_volatility,
-    #         'annual_return': annual_return,
-    #         'sharpe_ratio': sharpe_ratio,
-    #         'calmar_ratio': calmar_ratio,
-    #         'sortino_ratio': sortino_ratio,      # 增加索提诺比率
-    #         'max_drawdown': max_drawdown,
-    #         'win_rate': win_rate,
-    #         'max_time_to_recovery': max_time_to_recovery
-    #     }
-
     def multi_asset_combined_performance_analysis(self,strat,freq='D'):
         """
         对多资产组合进行综合绩效分析，支持多种数据频段。
@@ -1145,4 +1058,112 @@ class Analyzing_Tools():
         # 确保返回 DataFrame
         return results_df
 
+    def parameter_optimization(self, parameter_grid, strategy_function, strategy_class, target_assets, paths, cash=100000.0, commission=0.0002, slippage_perc=0.0005, metric='sharpe_ratio'):   
+        """
+        执行参数优化，支持一个或两个参数。
 
+        参数：
+        - parameter_grid: 字典，包含参数名称和要测试的取值列表。例如：{'window_1': [30, 34, 38]}
+        - strategy_function: 生成信号的策略函数，例如 UDVD
+        - strategy_class: Backtrader 策略类，例如 UDVD_Strategy
+        - target_assets: 资产列表
+        - paths: 数据路径字典
+        - cash: 初始资金
+        - commission: 佣金
+        - slippage_perc: 滑点百分比
+        - metric: 选择用于评估的绩效指标，默认为 'sharpe_ratio'
+        """
+
+
+        # 获取参数名称和取值列表
+        param_names = list(parameter_grid.keys())
+        param_values = [parameter_grid[key] for key in param_names]
+
+        # 生成所有参数组合
+        param_combinations = [dict(zip(param_names, values)) for values in product(*param_values)]
+
+        results = []
+
+        for params in param_combinations:
+            print(f"正在测试参数组合：{params}")
+            # 生成当前参数下的信号
+            strategy_results, full_info = strategy_function(target_assets, paths, **params)
+
+            # 运行回测
+            strat = self.run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+
+            # 获取净值序列
+            pv = strat.get_net_value_series()
+
+            # 计算绩效指标
+            portfolio_value, returns, drawdown_ts, metrics = self.performance_analysis(pv)
+
+            # 收集指标和参数
+            result_entry = {k: v for k, v in params.items()}
+            result_entry.update(metrics)
+            results.append(result_entry)
+
+        # 将结果转换为 DataFrame
+        results_df = pd.DataFrame(results)
+
+        # 可视化结果
+        if len(param_names) == 1:
+            # 绘制参数与绩效指标的关系曲线
+            param = param_names[0]
+            plt.figure(figsize=(10, 6))
+            plt.plot(results_df[param], results_df[metric], marker='o')
+            plt.xlabel(param)
+            plt.ylabel(metric)
+            plt.title(f'{metric} vs {param}')
+            plt.grid(True)
+            plt.show()
+        elif len(param_names) == 2:
+            # 绘制热力图
+            param1 = param_names[0]
+            param2 = param_names[1]
+            pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
+
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+            plt.title(f'{metric} Heatmap')
+            plt.ylabel(param1)
+            plt.xlabel(param2)
+            plt.show()
+        else:
+            print("无法可视化超过两个参数的结果，请减少参数数量。")
+
+        # 返回结果 DataFrame
+        return results_df
+
+    def run_backtest(self,strategy, target_assets, strategy_results, cash=10000000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+        
+        cerebro = bt.Cerebro()  # 初始化Cerebro引擎
+        cerebro.addstrategy(strategy, **kwargs)  # 添加策略
+        
+        for code in target_assets:
+            data = PandasDataPlusSignal(dataname=strategy_results[code])
+            data._name = code  # 为数据设置名称，便于识别
+            cerebro.adddata(data)
+        
+        # 使用setcommission设置股票模式的佣金
+        cerebro.broker.setcommission(
+            commission=commission,  # 佣金百分比
+            stocklike=True  # 将交易设置为股票模式
+        )
+        
+        cerebro.broker.setcash(cash)  # 设置初始资金
+
+        # 设置滑点
+        if slippage_perc is not None:
+            cerebro.broker.set_slippage_perc(slippage_perc)  # 设置百分比滑点
+        elif slippage_fixed is not None:
+            cerebro.broker.set_slippage_fixed(slippage_fixed)  # 设置固定点滑点
+        
+        strategies = cerebro.run()  # 运行回测
+        return strategies[0]
+    
+    class PandasDataPlusSignal(bt.feeds.PandasData):
+        lines = ('signal',)
+        params = (
+            ('signal', -1),  # 默认情况下，'signal' 列在最后一列   
+        )
