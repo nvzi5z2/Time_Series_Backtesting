@@ -305,7 +305,7 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100, 2),
+    'window_1': range(10, 100, 1),
 }
 
 # 运行参数优化
