@@ -3,8 +3,11 @@ import pandas as pd
 import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
+from itertools import product
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-def EMA_strategy(target_assets, paths,window_1=35,window_2=90):
+def EMA(target_assets, paths,window_1=35,window_2=90):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -46,7 +49,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class EMA_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.999),  # 每个资产的仓位百分比
+        ('size_pct',0.166),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -167,9 +170,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
 
 # 资产列表
@@ -191,16 +194,114 @@ strategy_results,full_info = EMA_strategy(target_assets, paths)
 # 获取策略实例
 strat = run_backtest(EMA_Strategy,target_assets,10000000,0,0)
 
-pv=strat.get_net_value_series()
+# pv=strat.get_net_value_series()
 
-portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
+# portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# 获取净值序列
-AT.plot_results('399006.SZ',portfolio_value, drawdown_ts, returns, metrics)
+# # 获取净值序列
+# AT.plot_results('399006.SZ',portfolio_value, drawdown_ts, returns, metrics)
 
-# 获取调试信息
-debug_df = strat.get_debug_df()
-
-
+# # 获取调试信息
+# debug_df = strat.get_debug_df()
 
 
+
+
+#定义参数优化函数
+def parameter_optimization(parameter_grid, strategy_function, strategy_class, target_assets, paths, cash=100000.0, commission=0.0002, slippage_perc=0.0005, metric='sharpe_ratio'):   
+    """
+    执行参数优化，支持一个或两个参数。
+
+    参数：
+    - parameter_grid: 字典，包含参数名称和要测试的取值列表。例如：{'window_1': [30, 34, 38]}
+    - strategy_function: 生成信号的策略函数，例如 UDVD
+    - strategy_class: Backtrader 策略类，例如 UDVD_Strategy
+    - target_assets: 资产列表
+    - paths: 数据路径字典
+    - cash: 初始资金
+    - commission: 佣金
+    - slippage_perc: 滑点百分比
+    - metric: 选择用于评估的绩效指标，默认为 'sharpe_ratio'
+    """
+
+    #加载数据类
+
+    # 获取参数名称和取值列表
+    param_names = list(parameter_grid.keys())
+    param_values = [parameter_grid[key] for key in param_names]
+
+    # 生成所有参数组合
+    param_combinations = [dict(zip(param_names, values)) for values in product(*param_values)]
+
+    results = []
+
+    for params in param_combinations:
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
+
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+
+        # 获取净值序列
+        pv = strat.get_net_value_series()
+
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        results.append(result_entry)
+
+    # 将结果转换为 DataFrame
+    results_df = pd.DataFrame(results)
+
+    # 可视化结果
+    if len(param_names) == 1:
+        # 绘制参数与绩效指标的关系曲线
+        param = param_names[0]
+        plt.figure(figsize=(10, 6))
+        plt.plot(results_df[param], results_df[metric], marker='o')
+        plt.xlabel(param)
+        plt.ylabel(metric)
+        plt.title(f'{metric} vs {param}')
+        plt.grid(True)
+        plt.show()
+    elif len(param_names) == 2:
+        # 绘制热力图
+        param1 = param_names[0]
+        param2 = param_names[1]
+        pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+        plt.title(f'{metric} Heatmap')
+        plt.ylabel(param1)
+        plt.xlabel(param2)
+        plt.show()
+    else:
+        print("无法可视化超过两个参数的结果，请减少参数数量。")
+
+    # 返回结果 DataFrame
+    return results_df
+
+
+# 定义参数网格
+parameter_grid = {
+    'window_1': range(10, 100,10),
+    'window_2':range(20,200,10),
+}
+
+# # 运行参数优化
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=EMA,
+    strategy_class=EMA_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0002,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)

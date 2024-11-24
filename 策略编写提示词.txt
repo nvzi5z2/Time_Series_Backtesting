@@ -1,0 +1,84 @@
+你是一名专业的量化投资经理，请你根据我提供的策略编写的案例，参考我编写策略的框架，帮我编写新的策略。
+
+1.背景：
+目前我有一个策略名为鳄鱼线策略，具体的策略已经通过python编写完成了。我现在想要优化这个策略，在现在这个策略的基础上优化。
+我的所有策略最后都会得到一个信号列，名为signal。我将所有策略都分为了看多、看空、无信号三种状态，分别用1，-1，0来代表。
+
+目前我的鳄鱼线的代码如下：“def alligator_strategy(target_assets, paths):
+    #信号结果字典
+    results = {}
+    #全数据字典，包含计算指标用于检查
+    full_info={}
+    
+    #编写策略主体部分
+    for code in target_assets:
+        # 读取数据
+        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+        daily_data.index = pd.to_datetime(daily_data.index)
+        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+        hourly_data.index = pd.to_datetime(hourly_data.index)
+        mins_15_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
+        mins_15_data.index = pd.to_datetime(mins_15_data.index)
+        mins_15_data = mins_15_data[~mins_15_data.index.duplicated(keep='first')]
+
+        # 提取收盘价
+        daily_data_close = daily_data[['close']]
+        hourly_data_close = hourly_data[['close']]
+        mins_15_data_close = mins_15_data[['close']]
+
+        # 计算鳄鱼线指标
+        Jaw = daily_data_close.rolling(window=13).mean().shift(8)
+        Teeth = hourly_data_close.rolling(window=8).mean().shift(5)
+        Lips = mins_15_data_close.rolling(window=5).mean().shift(3)
+
+        # 合并数据
+        combined = pd.concat([daily_data_close, Jaw, Teeth, Lips], axis=1)
+        combined.columns = ['Close', 'Jaw', 'Teeth', 'Lips']
+        combined.fillna(method='ffill', inplace=True)
+        result = combined.resample('D').last()
+        result.dropna(inplace=True)
+
+        # 生成交易信号
+        def signal_generation(row):
+            if row['Lips'] > row['Teeth'] > row['Jaw']:
+                return 1  # 多头信号
+            elif row['Lips'] < row['Teeth'] < row['Jaw']:
+                return -1  # 空头信号
+            else:
+                return 0  # 无信号
+
+        result['signal'] = result.apply(signal_generation, axis=1)
+
+
+        # 将信号合并回每日数据
+        daily_data = daily_data.join(result[['signal']], how='left')
+        daily_data[['signal']].fillna(0, inplace=True)
+        daily_data=daily_data.dropna()
+
+        # 存储结果
+        results[code] = daily_data
+        full_info[code]=result
+
+    return results,full_info”
+
+
+要求：
+
+1. 增加一个名为AO的指标，也就是叫做动量震荡指标，awesome oscillator（AO）。
+它的具体计算逻辑是：“测算了5根价格柱相对34根价格柱的动量变化。首先计算最近5根价格柱的最高价和最低价间的中点的简单移动平均值
+，即（最高价-最低价）/2的简单移动平均，将得出的值减去最近34根价格柱的最高价和最低价中点的简单移动平均，即（最高价-最低价）/2的简单易懂平均。
+两者的差值就是AO指标”
+
+2. 优化方法，在鳄鱼线的基础上，变为若T日鳄鱼线看多，且AO指标连续3个交易日上行，则信号为多，1，满仓；若T日鳄鱼线呈空头排列或者AO指标连续三个交易日下行，则信号为看空，空仓-1；其他
+情况无信号为，0. 注意这里看多的信号触发条件较为苛刻，需要两个条件均满足，而看空信号较为宽松，两个条件满足其一即可。
+
+3. 请严格参考我此前编写代码的风格来修改和优化现有的策略，AO指标是用日线去计算的。
+
+
+
+
+2003-01-14 00:00:00	000300.SH	1185.865	1185.865	1185.865	1185.865	23148156.12	16396542554
+2003-01-15 00:00:00	000300.SH	1177.971	1177.971	1177.971	1177.971	16330645.24	12350444509
+2003-01-16 00:00:00	000300.SH	1196.386	1196.386	1196.386	1196.386	11118525.03	8457470759
+2003-01-17 00:00:00	000300.SH	1190.895	1190.895	1190.895	1190.895	10212236.21	7671246827
+2003-01-20 00:00:00	000300.SH	1194.722	1194.722	1194.722	1194.722	8114552.24	6521105466

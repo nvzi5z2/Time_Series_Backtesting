@@ -183,9 +183,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
 
 # 资产列表
