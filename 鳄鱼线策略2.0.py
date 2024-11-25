@@ -3,6 +3,7 @@ import pandas as pd
 import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
+import numpy as np
 
 def alligator_strategy_with_ao_and_fractal(target_assets, paths):
     # 信号结果字典
@@ -58,16 +59,7 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
 
         result['Alligator_Signal'] = alligator_signals
 
-        # 计算 AO 指标
-        median_price = (daily_data_high + daily_data_low) / 2
-        ao_short = median_price.rolling(window=5).mean()
-        ao_long = median_price.rolling(window=34).mean()
-        AO = ao_short - ao_long
-
-        # 将 AO 转化为 DataFrame，并与鳄鱼线数据对齐
-        ao_df = AO.to_frame(name='AO')  # 将 AO 转换为 DataFrame
-
-        merged_df=pd.merge(result,ao_df,right_index=True,left_index=True)
+        #分形形态信号计算
         def identify_fractals_and_record_values(data):
             """
             识别分形并记录过去 5 日的最高价的最高值和最低价的最低值。
@@ -119,10 +111,39 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
                     data.loc[data.index[i], 'fractal_signal'] = data['fractal_signal'][i - 1]
 
             return data
-        # 分形信号计算
+   
         daily_data = identify_fractals_and_record_values(daily_data)
         daily_data = calculate_fractal_signals(daily_data)
         result['Fractal_Signal'] = daily_data['fractal_signal']
+
+        # 计算 AO 指标
+        median_price = (daily_data_high + daily_data_low) / 2
+        ao_short = median_price.rolling(window=5).mean()
+        ao_long = median_price.rolling(window=34).mean()
+        AO = ao_short - ao_long
+
+        # 将 AO 转化为 DataFrame，并与鳄鱼线数据对齐
+        ao_df = AO.to_frame(name='AO').dropna()  # 将 AO 转换为 DataFrame
+
+                # 计算 AO 的变化方向
+        ao_df['AO_Diff'] = ao_df['AO'].diff()
+
+        # 判断连续上涨和下跌天数
+        ao_df['Up_Count'] = (ao_df['AO_Diff'] > 0).astype(int).rolling(window=3).sum()
+        ao_df['Down_Count'] = (ao_df['AO_Diff'] < 0).astype(int).rolling(window=3).sum()
+
+        # 根据规则生成信号
+        ao_df['AO_Signal'] = np.where(ao_df['Up_Count'] == 3, 1, 
+                                    np.where(ao_df['Down_Count'] == 3, -1, np.nan))
+
+        # 延续上一个信号
+        ao_df['AO_Signal'] = ao_df['AO_Signal'].fillna(method='ffill').fillna(0)
+
+        # 删除辅助列，保留 AO 和 AO_Signal
+        ao_df = ao_df[['AO_Signal']]
+
+        result=pd.merge(result,ao_df,right_index=True,left_index=True)
+
 
         # 计算最终信号
         result['Signal'] = 0
@@ -276,9 +297,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
 
 # 资产列表

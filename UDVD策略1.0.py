@@ -310,14 +310,14 @@ parameter_grid = {
 }
 
 # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=UDVD,
-    strategy_class=UDVD_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=UDVD,
+#     strategy_class=UDVD_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0002,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )
