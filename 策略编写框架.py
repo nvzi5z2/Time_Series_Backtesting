@@ -7,7 +7,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def EMA(target_assets, paths,window_1=35,window_2=90):
+def EMA(target_assets, paths,window_1=20,window_2=60):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -108,7 +108,7 @@ class EMA_Strategy(bt.Strategy):
         """
         计算仓位大小
         """
-        available_cash = self.broker.getcash()
+        available_cash = self.broker.getvalue()
         current_price = data.close[0]
         max_investment = available_cash * self.params.size_pct
         max_shares = int(max_investment / current_price)
@@ -188,21 +188,21 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = EMA_strategy(target_assets, paths)
+strategy_results,full_info = EMA(target_assets, paths)
 
 
 # 获取策略实例
 strat = run_backtest(EMA_Strategy,target_assets,10000000,0,0)
 
-# pv=strat.get_net_value_series()
+pv=strat.get_net_value_series()
 
-# portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
+portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# # 获取净值序列
-# AT.plot_results('399006.SZ',portfolio_value, drawdown_ts, returns, metrics)
+# 获取净值序列
+AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 
-# # 获取调试信息
-# debug_df = strat.get_debug_df()
+# 获取调试信息
+debug_df = strat.get_debug_df()
 
 
 

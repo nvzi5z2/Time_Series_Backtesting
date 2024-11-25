@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def UDVD(target_assets, paths,window_1=24):
+def UDVD(target_assets, paths,window_1=34):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -119,7 +119,7 @@ class UDVD_Strategy(bt.Strategy):
         """
         计算仓位大小
         """
-        available_cash = self.broker.getcash()
+        available_cash = self.broker.getvalue()
         current_price = data.close[0]
         max_investment = available_cash * self.params.size_pct
         max_shares = int(max_investment / current_price)
@@ -205,7 +205,7 @@ strategy_results,full_info = UDVD(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000)
+strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
@@ -308,7 +308,7 @@ parameter_grid = {
     'window_1': range(10, 100, 1),
 }
 
-# # 运行参数优化
+# 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=UDVD,
