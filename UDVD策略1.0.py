@@ -268,10 +268,12 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         # 收集指标和参数
         result_entry = {k: v for k, v in params.items()}
         result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
         results.append(result_entry)
 
     # 将结果转换为 DataFrame
-    results_df = pd.DataFrame(results)
+    results_df = pd.concat(results,axis=0)
+    results_df=results_df.dropna()
 
     # 可视化结果
     if len(param_names) == 1:
@@ -302,21 +304,20 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
-
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100, 1),
+    'window_1': range(10, 101, 10),
 }
 
 # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=UDVD,
-#     strategy_class=UDVD_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0002,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=UDVD,
+    strategy_class=UDVD_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0002,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)

@@ -7,7 +7,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def EMA(target_assets, paths,window_1=20,window_2=60):
+def EMA(target_assets, paths,window_1=20,window_2=40):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -137,7 +137,7 @@ class EMA_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0006, slippage_perc=0.001, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -163,6 +163,8 @@ def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0006, slip
     
     strategies = cerebro.run()  # 运行回测
     return strategies[0]
+
+
 
 #加载分析工具
 AT=Analyzing_Tools()
@@ -192,7 +194,7 @@ strategy_results,full_info = EMA(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(EMA_Strategy,target_assets,10000000,0,0)
+strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
@@ -204,7 +206,9 @@ AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
+#蒙特卡洛分析
 
+AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
@@ -252,10 +256,12 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         # 收集指标和参数
         result_entry = {k: v for k, v in params.items()}
         result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
         results.append(result_entry)
 
     # 将结果转换为 DataFrame
-    results_df = pd.DataFrame(results)
+    results_df = pd.concat(results,axis=0)
+    results_df=results_df.dropna()
 
     # 可视化结果
     if len(param_names) == 1:
@@ -274,11 +280,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         param2 = param_names[1]
         pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
 
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
-        plt.title(f'{metric} Heatmap')
-        plt.ylabel(param1)
-        plt.xlabel(param2)
+        plt.figure(figsize=(15, 12))  # 调整图像大小
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis',
+                    annot_kws={"size": 8}, linewidths=0.5, linecolor='white')
+        plt.title(f'{metric} Heatmap', fontsize=16)
+        plt.ylabel(param1, fontsize=14)
+        plt.xlabel(param2, fontsize=14)
+        plt.xticks(rotation=45)
+        plt.yticks(rotation=0)
+        plt.tight_layout()  # 自动调整布局
         plt.show()
     else:
         print("无法可视化超过两个参数的结果，请减少参数数量。")
@@ -289,19 +299,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100,10),
-    'window_2':range(20,200,10),
+    'window_1': range(10, 101,10),
+    'window_2':range(20,201,10),
 }
 
-# # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=EMA,
-    strategy_class=EMA_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# # # 运行参数优化
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=EMA,
+#     strategy_class=EMA_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0005,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )

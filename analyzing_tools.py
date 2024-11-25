@@ -405,19 +405,21 @@ class Analyzing_Tools():
                 max_time_to_recovery = max(max_time_to_recovery, recovery_time)
                 recovery_start = None
 
-        return portfolio_value, returns, drawdown_ts, {
+        # 验证返回值的类型
+        metrics = {
             'total_return': total_return,
             'periods': periods,
             'annual_volatility': annual_volatility,
             'annual_return': annual_return,
             'sharpe_ratio': sharpe_ratio,
             'calmar_ratio': calmar_ratio,
-            'sortino_ratio': sortino_ratio,      # 增加索提诺比率
+            'sortino_ratio': sortino_ratio,
             'max_drawdown': max_drawdown,
             'win_rate': win_rate,
             'max_time_to_recovery': max_time_to_recovery
         }
 
+        return portfolio_value, returns, drawdown_ts, metrics
     def plot_results(self,benchmark_code, portfolio_value, drawdown_ts, returns, perf_metrics):
         # 假设 drawdown_ts 和 returns 是 DataFrame，转换为 Series
         drawdown_ts = drawdown_ts[drawdown_ts.columns[0]]
