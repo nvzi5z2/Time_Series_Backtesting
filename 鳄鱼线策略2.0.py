@@ -315,7 +315,7 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = alligator_strategy_with_ao(target_assets, paths)
+strategy_results,full_info = alligator_strategy_with_ao_and_fractal(target_assets, paths)
 
 
 # 获取策略实例
