@@ -10,7 +10,7 @@ import seaborn as sns
 import numpy as np
 
 
-def ADX(target_assets, paths,window_1=49):
+def ADX(target_assets, paths,window_1=28):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -326,14 +326,14 @@ parameter_grid = {
 }
 
 # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=ADX,
-    strategy_class=ADX_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=ADX,
+#     strategy_class=ADX_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0002,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )
