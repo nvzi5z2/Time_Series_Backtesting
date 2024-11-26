@@ -22,7 +22,7 @@ class Analyzing_Tools():
         btc_normalized = data['close'] / data['close'].iloc[0]
 
         # 创建一个图表，用于策略与底层资产价格对比
-        p_comparison = figure(x_axis_type="datetime", title="策略与底层资产价格对比", plot_height=400, plot_width=1000)
+        p_comparison = figure(x_axis_type="datetime", title="策略与底层资产价格对比", height=400, width=1000)
         p_comparison.grid.grid_line_alpha = 0.3
 
         # 将数据转换为ColumnDataSource类型
@@ -38,7 +38,7 @@ class Analyzing_Tools():
         p_comparison.legend.click_policy = "hide"
 
         # 创建一个图表，用于显示回测结果
-        p = figure(x_axis_type="datetime", title="回测结果", plot_height=400, plot_width=1000)
+        p = figure(x_axis_type="datetime", title="回测结果", height=400, width=1000)
         p.grid.grid_line_alpha = 0.3
 
         # 添加收盘价线
@@ -73,35 +73,35 @@ class Analyzing_Tools():
         p.legend.click_policy = "hide"
 
         # 创建一个图表，用于显示组合价值
-        p_value = figure(x_axis_type="datetime", title="组合价值", plot_height=300, plot_width=1000)
+        p_value = figure(x_axis_type="datetime", title="组合价值", height=300, width=1000)
         p_value.line(portfolio_value.index, portfolio_value, color='navy', legend_label='组合价值')
         p_value.grid.grid_line_alpha = 0.3
 
         # 创建一个图表，用于显示回撤
-        p_drawdown = figure(x_axis_type="datetime", title="回撤", plot_height=300, plot_width=1000)
+        p_drawdown = figure(x_axis_type="datetime", title="回撤", height=300, width=1000)
         p_drawdown.line(drawdown_ts.index, drawdown_ts, color='red', legend_label='回撤')
         p_drawdown.grid.grid_line_alpha = 0.3
 
         # 创建一个图表，用于显示每日收益分布
-        p_returns_hist = figure(title="每日收益分布", plot_height=300, plot_width=1000)
+        p_returns_hist = figure(title="每日收益分布", height=300, width=1000)
         hist, edges = np.histogram(returns, bins=50)
         p_returns_hist.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:], fill_color="navy", line_color="white", alpha=0.5)
 
         # 计算每周收益并创建相应的分布图表
         weekly_returns = returns.resample('W').sum()
-        p_weekly_returns_hist = figure(title="每周收益分布", plot_height=300, plot_width=1000)
+        p_weekly_returns_hist = figure(title="每周收益分布", height=300, width=1000)
         hist_weekly, edges_weekly = np.histogram(weekly_returns, bins=50)
         p_weekly_returns_hist.quad(top=hist_weekly, bottom=0, left=edges_weekly[:-1], right=edges_weekly[1:], fill_color="orange", line_color="white", alpha=0.5)
 
         # 计算每月收益并创建相应的分布图表
         monthly_returns = returns.resample('M').sum()
-        p_monthly_returns_hist = figure(title="每月收益分布", plot_height=300, plot_width=1000)
+        p_monthly_returns_hist = figure(title="每月收益分布", height=300, width=1000)
         hist_monthly, edges_monthly = np.histogram(monthly_returns, bins=50)
         p_monthly_returns_hist.quad(top=hist_monthly, bottom=0, left=edges_monthly[:-1], right=edges_monthly[1:], fill_color="green", line_color="white", alpha=0.5)
 
         # 计算累计收益并创建相应的图表
         cumulative_returns = (1 + returns).cumprod() - 1
-        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", plot_height=300, plot_width=1000)
+        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", height=300, width=1000)
         p_cum_returns.line(cumulative_returns.index, cumulative_returns, color='green', legend_label='累计收益')
         p_cum_returns.grid.grid_line_alpha = 0.3
 
@@ -256,35 +256,35 @@ class Analyzing_Tools():
         """
 
         # 创建一个图表，用于显示组合价值
-        p_value = figure(x_axis_type="datetime", title="组合价值", plot_height=400, plot_width=1000)
+        p_value = figure(x_axis_type="datetime", title="组合价值", height=400, width=1000)
         p_value.line(portfolio_value.index, portfolio_value, color='navy', legend_label='组合价值')
         p_value.grid.grid_line_alpha = 0.3
 
         # 创建一个图表，用于显示回撤
-        p_drawdown = figure(x_axis_type="datetime", title="回撤", plot_height=300, plot_width=1000)
+        p_drawdown = figure(x_axis_type="datetime", title="回撤", height=300, width=1000)
         p_drawdown.line(drawdown_ts.index, drawdown_ts, color='red', legend_label='回撤')
         p_drawdown.grid.grid_line_alpha = 0.3
 
         # 创建一个图表，用于显示每日收益分布
-        p_returns_hist = figure(title="每日收益分布", plot_height=300, plot_width=1000)
+        p_returns_hist = figure(title="每日收益分布", height=300, width=1000)
         hist, edges = np.histogram(returns, bins=50)
         p_returns_hist.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:], fill_color="navy", line_color="white", alpha=0.5)
 
         # 计算每周收益并创建相应的分布图表
         weekly_returns = returns.resample('W').sum()
-        p_weekly_returns_hist = figure(title="每周收益分布", plot_height=300, plot_width=1000)
+        p_weekly_returns_hist = figure(title="每周收益分布", height=300, width=1000)
         hist_weekly, edges_weekly = np.histogram(weekly_returns, bins=50)
         p_weekly_returns_hist.quad(top=hist_weekly, bottom=0, left=edges_weekly[:-1], right=edges_weekly[1:], fill_color="orange", line_color="white", alpha=0.5)
 
         # 计算每月收益并创建相应的分布图表
         monthly_returns = returns.resample('M').sum()
-        p_monthly_returns_hist = figure(title="每月收益分布", plot_height=300, plot_width=1000)
+        p_monthly_returns_hist = figure(title="每月收益分布", height=300, width=1000)
         hist_monthly, edges_monthly = np.histogram(monthly_returns, bins=50)
         p_monthly_returns_hist.quad(top=hist_monthly, bottom=0, left=edges_monthly[:-1], right=edges_monthly[1:], fill_color="green", line_color="white", alpha=0.5)
 
         # 计算累计收益并创建相应的图表
         cumulative_returns = (1 + returns).cumprod() - 1
-        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", plot_height=300, plot_width=1000)
+        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", height=300, width=1000)
         p_cum_returns.line(cumulative_returns.index, cumulative_returns, color='green', legend_label='累计收益')
         p_cum_returns.grid.grid_line_alpha = 0.3
 
@@ -438,7 +438,7 @@ class Analyzing_Tools():
         benchmark_data_normalized = benchmark_data['close'] / benchmark_data['close'].iloc[0]
 
         # 创建一个图表，用于策略与底层资产价格对比
-        p_comparison = figure(x_axis_type="datetime", title="策略与底层资产价格对比", plot_height=400, plot_width=1000)
+        p_comparison = figure(x_axis_type="datetime", title="策略与底层资产价格对比", height=400, width=1000)
         p_comparison.grid.grid_line_alpha = 0.3
 
         # 标准化的基准价格曲线
@@ -455,7 +455,7 @@ class Analyzing_Tools():
         p_comparison.legend.click_policy = "hide"
 
         # 创建一个图表，用于显示组合价值
-        p_value = figure(x_axis_type="datetime", title="组合价值", plot_height=300, plot_width=1000)
+        p_value = figure(x_axis_type="datetime", title="组合价值", height=300, width=1000)
         p_value.line(portfolio_value_series.index, portfolio_value_series, color='navy', legend_label='组合价值')
         p_value.grid.grid_line_alpha = 0.3
 
@@ -473,30 +473,30 @@ class Analyzing_Tools():
         p_value.add_tools(hover_p_value)
 
         # 创建一个图表，用于显示回撤
-        p_drawdown = figure(x_axis_type="datetime", title="回撤", plot_height=300, plot_width=1000)
+        p_drawdown = figure(x_axis_type="datetime", title="回撤", height=300, width=1000)
         p_drawdown.line(drawdown_ts.index, drawdown_ts, color='red', legend_label='回撤')
         p_drawdown.grid.grid_line_alpha = 0.3
 
         # 创建一个图表，用于显示每日收益分布
-        p_returns_hist = figure(title="每日收益分布", plot_height=300, plot_width=1000)
+        p_returns_hist = figure(title="每日收益分布", height=300, width=1000)
         hist, edges = np.histogram(returns, bins=50)
         p_returns_hist.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:], fill_color="navy", line_color="white", alpha=0.5)
 
         # 计算每周收益并创建相应的分布图表
         weekly_returns = returns.resample('W').sum()
-        p_weekly_returns_hist = figure(title="每周收益分布", plot_height=300, plot_width=1000)
+        p_weekly_returns_hist = figure(title="每周收益分布", height=300, width=1000)
         hist_weekly, edges_weekly = np.histogram(weekly_returns, bins=50)
         p_weekly_returns_hist.quad(top=hist_weekly, bottom=0, left=edges_weekly[:-1], right=edges_weekly[1:], fill_color="orange", line_color="white", alpha=0.5)
 
         # 计算每月收益并创建相应的分布图表
         monthly_returns = returns.resample('M').sum()
-        p_monthly_returns_hist = figure(title="每月收益分布", plot_height=300, plot_width=1000)
+        p_monthly_returns_hist = figure(title="每月收益分布", height=300, width=1000)
         hist_monthly, edges_monthly = np.histogram(monthly_returns, bins=50)
         p_monthly_returns_hist.quad(top=hist_monthly, bottom=0, left=edges_monthly[:-1], right=edges_monthly[1:], fill_color="green", line_color="white", alpha=0.5)
 
         # 计算累计收益并创建相应的图表
         cumulative_returns = (1 + returns).cumprod() - 1
-        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", plot_height=300, plot_width=1000)
+        p_cum_returns = figure(x_axis_type="datetime", title="累计收益", height=300, width=1000)
         p_cum_returns.line(cumulative_returns.index, cumulative_returns, color='green', legend_label='累计收益')
         p_cum_returns.grid.grid_line_alpha = 0.3
 
