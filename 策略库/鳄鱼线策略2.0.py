@@ -125,7 +125,7 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
         # 将 AO 转化为 DataFrame，并与鳄鱼线数据对齐
         ao_df = AO.to_frame(name='AO').dropna()  # 将 AO 转换为 DataFrame
 
-                # 计算 AO 的变化方向
+        # 计算 AO 的变化方向
         ao_df['AO_Diff'] = ao_df['AO'].diff()
 
         # 判断连续上涨和下跌天数
