@@ -4,12 +4,10 @@ import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
 from itertools import product
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
-def UDVD(target_assets, paths,window_1=34):
+def EMA(target_assets, paths,window_1=20,window_2=40):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -20,25 +18,38 @@ def UDVD(target_assets, paths,window_1=34):
         # 读取数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
+
         df=daily_data.copy()
-        close = df["close"]
-        open = df['open']    
-        low = df["low"]
-        high = df["high"]
-        volume = df['volume']
         # 计算
-        volup = (high-open)/open
-        voldown = (open-low)/open
-        ud= volup - voldown
+        # 保留一位小数
+        df = df.round(0)
+        #df['Date'] = pd.to_datetime(df['Date'])
+        #信号触发
+        # 计算每日涨跌幅
+        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
+        
+        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
+        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
+        
+        #涨跌幅连续十天符合
+        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window=10).sum()
 
-        df["var_1"] = ud.rolling(window_1).mean()
-        df["var_2"] =0
-        # 添加信号列
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] >= df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = -1
-        df['signal'].fillna(method='ffill', inplace=True)
+        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
+        
+        df['连续红K线'] = (df['close'] > df['open']).astype(int)
+        
+        df['连续红K线'] = df['连续红K线'].rolling(window=10).sum()
+        #合并所有信息，上下信息
+        df['diff'] = ((df['连续涨跌幅']==10) & 
+                    (df['连续红K线'] >= 7)).astype(int)
+        # 添加signal列，使用apply函数
+        df['signal'] = -1  # 初始化 signal 列为 -1
+
+        for i in range(len(df)):
+            if df['diff'][i] > 0:
+                for j in range(i, min(i + 10, len(df))):  # 循环处理当天及未来四天
+                    df['signal'][j] = 1
         result=df
-
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
@@ -58,9 +69,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UDVD_Strategy(bt.Strategy):
+class EMA_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.166),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -183,7 +194,7 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
@@ -201,11 +212,11 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UDVD(target_assets, paths)
+strategy_results,full_info = EMA(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
@@ -217,10 +228,9 @@ AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
-#蒙特卡洛测试
+#蒙特卡洛分析
 
 AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
-
 
 
 #定义参数优化函数
@@ -292,11 +302,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         param2 = param_names[1]
         pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
 
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
-        plt.title(f'{metric} Heatmap')
-        plt.ylabel(param1)
-        plt.xlabel(param2)
+        plt.figure(figsize=(15, 12))  # 调整图像大小
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis',
+                    annot_kws={"size": 8}, linewidths=0.5, linecolor='white')
+        plt.title(f'{metric} Heatmap', fontsize=16)
+        plt.ylabel(param1, fontsize=14)
+        plt.xlabel(param2, fontsize=14)
+        plt.xticks(rotation=45)
+        plt.yticks(rotation=0)
+        plt.tight_layout()  # 自动调整布局
         plt.show()
     else:
         print("无法可视化超过两个参数的结果，请减少参数数量。")
@@ -304,20 +318,22 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
+
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 101, 10),
+    'window_1': range(5, 30,2),
+    'window_2':range(20,50,2),
 }
 
-# 运行参数优化
+# # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=UDVD,
-#     strategy_class=UDVD_Strategy,
+#     strategy_function=EMA,
+#     strategy_class=EMA_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
-#     commission=0.0002,
+#     commission=0.0005,
 #     slippage_perc=0.0005,
 #     metric='sharpe_ratio'
 # )
