@@ -10,7 +10,7 @@ import seaborn as sns
 import numpy as np
 
 
-def ADX(target_assets, paths,window_1=49):
+def ADX(target_assets, paths,window_1=28):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -136,7 +136,7 @@ class ADX_Strategy(bt.Strategy):
         """
         计算仓位大小
         """
-        available_cash = self.broker.getcash()
+        available_cash = self.broker.getvalue()
         current_price = data.close[0]
         max_investment = available_cash * self.params.size_pct
         max_shares = int(max_investment / current_price)
@@ -325,7 +325,7 @@ parameter_grid = {
     'window_1': range(10, 100, 2),
 }
 
-# # 运行参数优化
+# 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=ADX,

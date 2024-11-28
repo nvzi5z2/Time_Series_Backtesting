@@ -148,7 +148,7 @@ class UDVD_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -183,9 +183,15 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
+<<<<<<< HEAD:策略库/UDVD策略1.0.py
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+=======
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+>>>>>>> origin/main:UDVD策略1.0.py
 }
 
 # 资产列表

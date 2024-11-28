@@ -34,39 +34,38 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
 
         # 计算鳄鱼线指标
         Jaw = daily_data_close.rolling(window=13).mean().shift(8)
+        Jaw.columns=['Jaw']
         Teeth = hourly_data_close.rolling(window=8).mean().shift(5)
+        Teeth.columns=['Teeth']
         Lips = mins_15_data_close.rolling(window=5).mean().shift(3)
+        Lips.columns=['Lips']
 
         # 合并鳄鱼线数据并统一到日频
-        combined = pd.concat([daily_data_close, Jaw, Teeth, Lips], axis=1)
-        combined.columns = ['Close', 'Jaw', 'Teeth', 'Lips']
+        combined = pd.concat([daily_data, Jaw, Teeth, Lips], axis=1)
         combined.fillna(method='ffill', inplace=True)
         result = combined.resample('D').last()
         result.dropna(inplace=True)
 
-        # 鳄鱼线信号计算
-        alligator_signals = []
-        for i in range(len(result)):
-            if result['Jaw'][i] > result['Teeth'][i] > result['Lips'][i]:
-                alligator_signals.append(-1)  # 看空
-            elif result['Jaw'][i] < result['Teeth'][i] < result['Lips'][i]:
-                alligator_signals.append(1)  # 看多
+        # 生成交易信号
+        def signal_generation(row):
+            if row['Lips'] > row['Teeth'] > row['Jaw']:
+                return 1  # 多头信号
+            elif row['Lips'] < row['Teeth'] < row['Jaw']:
+                return -1  # 空头信号
             else:
-                if i == 0:
-                    alligator_signals.append(0)  # 初始信号为 0
-                else:
-                    alligator_signals.append(alligator_signals[-1])
+                return 0  # 无信号
 
-        result['Alligator_Signal'] = alligator_signals
+        result['Alligator_signal'] = result.apply(signal_generation, axis=1)
 
         #分形形态信号计算
-        def identify_fractals_and_record_values(data):
+        def identify_fractals_and_record_values(df):
             """
             识别分形并记录过去 5 日的最高价的最高值和最低价的最低值。
             :param data: 包含时间序列数据的 DataFrame，需包含 'high', 'low', 'close' 列。
             :return: 包含 up_fractal_value 和 down_fractal_value 的 DataFrame。
             """
             # 初始化两列用于记录分形值
+            data=df.copy()
             data['up_fractal_value'] = None
             data['down_fractal_value'] = None
 
@@ -92,13 +91,14 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
 
             return data
         
-        def calculate_fractal_signals(data):
+        def calculate_fractal_signals(df):
             """
             基于分形值计算交易信号，并在特定情况下保持上一周期的信号。
             :param data: 包含 'close', 'up_fractal_value', 'down_fractal_value' 列的 DataFrame。
             :return: 包含 fractal_signal 的 DataFrame。
             """
             # 初始化信号列，默认值为 0
+            data=df.copy()
             data['fractal_signal'] = 0
 
             # 遍历数据，每一行根据条件更新信号
@@ -108,13 +108,13 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
                 elif data['close'][i] < data['down_fractal_value'][i]:  # 收盘价低于最近的下分形的最低价，看空
                     data.loc[data.index[i], 'fractal_signal'] = -1
                 else:  # 其他情况，维持上一周期的信号
-                    data.loc[data.index[i], 'fractal_signal'] = data['fractal_signal'][i - 1]
+                    data.loc[data.index[i], 'fractal_signal'] = 0
 
             return data
    
-        daily_data = identify_fractals_and_record_values(daily_data)
-        daily_data = calculate_fractal_signals(daily_data)
-        result['Fractal_Signal'] = daily_data['fractal_signal']
+        fractals_data= identify_fractals_and_record_values(daily_data)
+        fractals_signals = calculate_fractal_signals(fractals_data)
+        result['Fractal_signal'] = fractals_signals['fractal_signal']
 
         # 计算 AO 指标
         median_price = (daily_data_high + daily_data_low) / 2
@@ -133,50 +133,53 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
         ao_df['Down_Count'] = (ao_df['AO_Diff'] < 0).astype(int).rolling(window=3).sum()
 
         # 根据规则生成信号
-        ao_df['AO_Signal'] = np.where(ao_df['Up_Count'] == 3, 1, 
+        ao_df['AO_signal'] = np.where(ao_df['Up_Count'] == 3, 1, 
                                     np.where(ao_df['Down_Count'] == 3, -1, np.nan))
 
         # 延续上一个信号
-        ao_df['AO_Signal'] = ao_df['AO_Signal'].fillna(method='ffill').fillna(0)
+        ao_df['AO_signal'] = ao_df['AO_signal'].fillna(0)
 
-        # 删除辅助列，保留 AO 和 AO_Signal
-        ao_df = ao_df[['AO_Signal']]
+        # 删除辅助列，保留 AO 和 AO_signal
+        ao_df = ao_df[['AO_signal']]
 
         result=pd.merge(result,ao_df,right_index=True,left_index=True)
 
-
-        # 计算最终信号
-        result['Signal'] = 0
+        #计算最终信号
+        result['signal'] = 0
         for i in range(len(result)):
-            if result['Alligator_Signal'][i] == 1 and (
-                result['AO_Signal'][i] == 1 or result['Fractal_Signal'][i] == 1):
-                result['Signal'][i] = 1  # 总体看多
-            elif (result['Alligator_Signal'][i] == -1 or
-                  result['AO_Signal'][i] == -1 or
-                  result['Fractal_Signal'][i] == -1):
-                result['Signal'][i] = -1  # 总体看空
+            long_condition = (result['Alligator_signal'][i] == 1 and 
+                            (result['AO_signal'][i] == 1 or result['Fractal_signal'][i] == 1))
+            short_condition = (result['Alligator_signal'][i] == -1 or
+                            result['AO_signal'][i] == -1 or result['Fractal_signal'][i] == -1)
+            
+            if long_condition and short_condition:  # 同时触发多空信号
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0  # 延续上一周期信号
+            elif long_condition:
+                result['signal'][i] = 1  # 看多
+            elif short_condition:
+                result['signal'][i] = -1  # 看空
             else:
-                # 维持上一个信号
-                if i > 0:
-                    result['Signal'][i] = result['Signal'][i - 1]
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0 # 延续上一周期信号
 
         # 存储结果
-        results[code] = result[['Close', 'Signal']]  # 包含最终信号的日线数据
+        signal=result[['signal']]
+        results[code]=pd.merge(daily_data,signal,right_index=True,left_index=True)
         full_info[code] = result  # 包含所有信号计算信息的数据
 
     return results, full_info
 
 # 自定义数据类，包含 'signal'
-class PandasDataPlusSignal(bt.feeds.PandasData):
+class PandasDataPlussignal(bt.feeds.PandasData):
     lines = ('signal',)
     params = (
         ('signal', -1),  # 默认情况下，'signal' 列在最后一列   
     )
 
+
 # 策略类，包含调试信息和导出方法
 class Alligator_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.166),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -233,13 +236,13 @@ class Alligator_Strategy(bt.Strategy):
 
     def calculate_position_size(self, data):
         """
-        计算每个资产的仓位大小
+        计算仓位大小
         """
-        available_cash = self.broker.get_value()
-        total_assets = len(self.datas)
+        available_cash = self.broker.getvalue()
+        current_price = data.close[0]
         max_investment = available_cash * self.params.size_pct
-        size = int(max_investment / data.close[0])
-        return size
+        max_shares = int(max_investment / current_price)
+        return max_shares
 
     def notify_order(self, order):
         """
@@ -270,7 +273,7 @@ def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0006, slip
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
     
     for code in target_assets:
-        data = PandasDataPlusSignal(dataname=strategy_results[code])
+        data = PandasDataPlussignal(dataname=strategy_results[code])
         data._name = code  # 为数据设置名称，便于识别
         cerebro.adddata(data)
     
@@ -297,12 +300,12 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
 
-# 资产列表
+# # 资产列表
 target_assets = [
     "000016.SH",
     "000300.SH",
@@ -315,18 +318,18 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = alligator_strategy_with_ao(target_assets, paths)
+strategy_results,full_info = alligator_strategy_with_ao_and_fractal(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(Alligator_Strategy,target_assets,10000000,0,0)
+strat = run_backtest(Alligator_Strategy,target_assets,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-AT.plot_results('000300.SH',portfolio_value, drawdown_ts, returns, metrics)
+AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
