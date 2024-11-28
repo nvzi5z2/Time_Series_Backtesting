@@ -125,7 +125,7 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
         # 将 AO 转化为 DataFrame，并与鳄鱼线数据对齐
         ao_df = AO.to_frame(name='AO').dropna()  # 将 AO 转换为 DataFrame
 
-                # 计算 AO 的变化方向
+        # 计算 AO 的变化方向
         ao_df['AO_Diff'] = ao_df['AO'].diff()
 
         # 判断连续上涨和下跌天数
@@ -300,9 +300,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
 
 # # 资产列表
@@ -322,7 +322,7 @@ strategy_results,full_info = alligator_strategy_with_ao_and_fractal(target_asset
 
 
 # 获取策略实例
-strat = run_backtest(Alligator_Strategy,target_assets,10000000,0.0005,0.0005)
+strat = run_backtest(Alligator_Strategy,target_assets,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
