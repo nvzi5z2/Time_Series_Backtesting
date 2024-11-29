@@ -240,24 +240,29 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        print(f"正在测试参数组合：{params}")
-        # 生成当前参数下的信号
-        strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        try:
+            print(f"正在测试参数组合：{params}")
+            # 生成当前参数下的信号
+            strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-        # 运行回测
-        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+            # 运行回测
+            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-        # 获取净值序列
-        pv = strat.get_net_value_series()
+            # 获取净值序列
+            pv = strat.get_net_value_series()
 
-        # 计算绩效指标
-        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+            # 计算绩效指标
+            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-        # 收集指标和参数
-        result_entry = {k: v for k, v in params.items()}
-        result_entry.update(metrics)
-        result_entry=pd.DataFrame(result_entry)
-        results.append(result_entry)
+            # 收集指标和参数
+            result_entry = {k: v for k, v in params.items()}
+            result_entry.update(metrics)
+            result_entry=pd.DataFrame(result_entry)
+            results.append(result_entry)
+
+        except:
+
+            printprint(f"参数组合出现错误：{params}")
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -303,15 +308,15 @@ parameter_grid = {
     'window_2':range(20,201,10),
 }
 
-# # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=EMA,
-#     strategy_class=EMA_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+# # 运行参数优化
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=EMA,
+    strategy_class=EMA_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0005,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)
