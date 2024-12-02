@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
 import numpy as np
 
-def alligator_strategy_with_ao_and_fractal(target_assets, paths):
+def alligator_strategy_with_ao_and_fractal_macd(target_assets, paths):
     # 信号结果字典
     results = {}
     # 全数据字典，包含计算指标用于检查
@@ -144,13 +144,46 @@ def alligator_strategy_with_ao_and_fractal(target_assets, paths):
 
         result=pd.merge(result,ao_df,right_index=True,left_index=True)
 
+        #计算MACD指标
+        df = daily_data.copy()
+        # 1. 计算快线（DIFF）和慢线（DEA）
+        df['ema_short'] = df['close'].ewm(span=12, adjust=False).mean()
+        df['ema_long'] = df['close'].ewm(span=26, adjust=False).mean()
+        df['diff'] = df['ema_short'] - df['ema_long']  # DIFF 快线
+        df['dea'] = df['diff'].ewm(span=9, adjust=False).mean()  # DEA 慢线
+        
+        # 2. 计算能量柱
+        df['macd_bar'] = (df['diff'] - df['dea']) * 2
+
+        # 添加macd信号列
+        def macd_generate_signal(row):
+            # 水上或零轴看多信号
+            if row['diff'] > row['dea'] and row['macd_bar'] >= 0:
+                return 1
+            # 水下或零轴看空信号
+            elif row['diff'] < row['dea'] and row['macd_bar'] <= 0:
+                return -1
+            # 无信号
+            else:
+                return 0
+
+        # 应用macd信号生成规则
+        df['MACD_signal'] = df.apply(macd_generate_signal, axis=1)
+        
+        macd_df=df[['MACD_signal']]
+
+        result=pd.merge(result,macd_df,right_index=True,left_index=True)
         #计算最终信号
+
         result['signal'] = 0
         for i in range(len(result)):
             long_condition = (result['Alligator_signal'][i] == 1 and 
-                            (result['AO_signal'][i] == 1 or result['Fractal_signal'][i] == 1))
+                            (result['MACD_signal'][i] == 1 or result['Fractal_signal'][i] == 1
+                             or result['AO_signal'][i] == 1)
+                             )
             short_condition = (result['Alligator_signal'][i] == -1 or
-                            result['AO_signal'][i] == -1 or result['Fractal_signal'][i] == -1)
+                            result['AO_signal'][i] == -1 or result['Fractal_signal'][i] == -1 or
+                            result['MACD_signal'][i]== -1)
             
             if long_condition and short_condition:  # 同时触发多空信号
                 result['signal'][i] = result['signal'][i - 1] if i > 0 else 0  # 延续上一周期信号
@@ -267,7 +300,7 @@ class Alligator_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0000, slippage_perc=0.0000, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -318,7 +351,7 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = alligator_strategy_with_ao_and_fractal(target_assets, paths)
+strategy_results,full_info = alligator_strategy_with_ao_and_fractal_macd(target_assets, paths)
 
 
 # 获取策略实例
@@ -335,6 +368,9 @@ AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, retur
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
+
+#蒙特卡洛模拟
+AT.monte_carlo_analysis(strat)
 
 
 

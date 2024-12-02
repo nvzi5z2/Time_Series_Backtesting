@@ -421,7 +421,7 @@ class Analyzing_Tools():
 
         return portfolio_value, returns, drawdown_ts, metrics
     
-    def plot_results(self,benchmark_code, index_price_papth, portfolio_value, drawdown_ts, returns, perf_metrics):
+    def plot_results(self,benchmark_code, index_price_path, portfolio_value, drawdown_ts, returns, perf_metrics):
         # 假设 drawdown_ts 和 returns 是 DataFrame，转换为 Series
         drawdown_ts = drawdown_ts[drawdown_ts.columns[0]]
         returns = returns[returns.columns[0]]

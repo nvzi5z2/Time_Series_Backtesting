@@ -6,14 +6,14 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
-def ADX_River(target_assets, paths,window_1=28):
+def BBS(target_assets, paths,window_1=220):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
     full_info={}
-    
+    free_turn_path=paths['free_turn_path']
+
     #编写策略主体部分
     for code in target_assets:
         # 读取数据
@@ -21,83 +21,44 @@ def ADX_River(target_assets, paths,window_1=28):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
-        # 计算
-        
-        #满江红策略
-        # 保留一位小数
-        df = df.round(0)
+        code=df.iloc[0,0]
+        def get_free_turn_data(code,free_turn_path):
+            file = r"D:\数据库\同花顺指数自由流通换手率"
 
-        #信号触发
-        # 计算每日涨跌幅
-        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
-        
-        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
-        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
-        
-        #涨跌幅连续十天符合
-        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window=10).sum()
+            filename = file + '\\' + code + '.csv'
 
-        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
+            data = pd.read_csv(filename, index_col=[0])
+
+            data.index=pd.to_datetime(data.index)
+
+            data=data[["ths_free_turnover_ratio_index"]]
+
+            data.columns=["换手率（基于自由流通市值）"]
+
+            data = data / 100
+
+            return data
         
-        df['连续红K线'] = (df['close'] > df['open']).astype(int)
-        
-        df['连续红K线'] = df['连续红K线'].rolling(window=10).sum()
-        #合并所有信息，上下信息
-        df['diff'] = ((df['连续涨跌幅']==10) & 
-                    (df['连续红K线'] >= 7)).astype(int)
+        free_turn=get_free_turn_data(code,free_turn_path).dropna()
+        free_turn.index=pd.to_datetime(free_turn.index)
+        total=pd.merge(df,free_turn,right_index=True,left_index=True)
+        total.loc[:,"free_turn_ma"]=total['换手率（基于自由流通市值）'].rolling(window_1).mean()
+        total.loc[:,"pct"]=total['close'].pct_change()
+        total.loc[:,"std"]=total['pct'].rolling(window_1).std()
+        total['bull_bear']=total['std']/total['free_turn_ma']
+        total['short_MA']=total['bull_bear'].rolling(20).mean()
+        total['long_MA']=total['bull_bear'].rolling(60).mean()
+        total['diff']=total['short_MA']-total['long_MA']
         # 添加signal列，使用apply函数
-        df['signal_1'] = -1  # 初始化 signal 列为 -1
-
-        for i in range(len(df)):
-            if df['diff'][i] > 0:
-                for j in range(i, min(i + 1, len(df))):  # 循环处理当天及未来四天
-                    df['signal_1'][j] = 1
-        
-        #ADX策略
-        df['high_low'] = df['high'] - df['low']
-        df['high_close'] = np.abs(df['high'] - df['close'].shift())
-        df['low_close'] = np.abs(df['low'] - df['close'].shift())
-        df['TR'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
-        
-        # 计算 Directional Movement (+DM 和 -DM)
-        df['+DM'] = np.where((df['high'] > df['high'].shift()) & 
-                            (df['high'] - df['high'].shift() > df['low'].shift() - df['low']), 
-                            df['high'] - df['high'].shift(), 0)
-        df['-DM'] = np.where((df['low'].shift() > df['low']) & 
-                            (df['low'].shift() - df['low'] > df['high'] - df['high'].shift()), 
-                            df['low'].shift() - df['low'], 0)
-        
-        # 平滑 +DM, -DM 和 TR
-        df['smoothed+DM'] = df['+DM'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['smoothed-DM'] = df['-DM'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['smoothed_TR'] = df['TR'].ewm(alpha=1/window_1, adjust=False).mean()
-        
-        # 计算 +DI 和 -DI，衡量正向和负向运动的强度
-        df['+DI'] = 100 * (df['smoothed+DM'] / df['smoothed_TR'])
-        df['-DI'] = 100 * (df['smoothed-DM'] / df['smoothed_TR'])
-        
-        # 计算 DX 和 ADX，ADX 表示趋势的强度，不考虑趋势的方向
-        
-        df['DX'] = 100 * np.abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
-        df['ADX'] = df['DX'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['signal_2'] = 0
-
-        #看多为1，看空为-1
-        df.loc[df['+DI'] > df['-DI'], 'signal_2'] = 1
-        df.loc[df['+DI'] <= df['-DI'], 'signal_2'] = -1
-
-        df['signal_sum']=df['signal_1']+df['signal_2']
-        # 添加signal列，使用apply函数
-        df['signal'] = df['signal_sum'].apply(lambda x: 1 if x > -2 else -1)
-        result=df
+        total['signal'] = total['diff'].apply(lambda x: -1 if x > 0 else 1)
         # 将信号合并回每日数据
-        daily_data = daily_data.join(result[['signal']], how='left')
+        daily_data = daily_data.join(total[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
         daily_data=daily_data.dropna()
 
         # 存储结果
         results[code] = daily_data
-        full_info[code]=result
+        full_info[code]=total
 
     return results,full_info
 
@@ -109,7 +70,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class ADX_River_Strategy(bt.Strategy):
+class BBS_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -235,10 +196,10 @@ AT=Analyzing_Tools()
 # 定义数据路径
 paths = {
     'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\策略净值序列"
+    'free_turn_path':r"D:\数据库\同花顺指数自由流通换手率",
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
+
 
 # 资产列表
 target_assets = [
@@ -250,19 +211,20 @@ target_assets = [
     "399303.SZ"
 ]
 
-strtegy_name='ADX_River'
+
 
 # 生成信号
-strategy_results,full_info = ADX_River(target_assets, paths)
+strategy_results,full_info = BBS(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0,0)
 
-#获取净值
 pv=strat.get_net_value_series()
 
-#输出策略名称
+strtegy_name='BBS_Strategy'
+
+#输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -309,24 +271,29 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        print(f"正在测试参数组合：{params}")
-        # 生成当前参数下的信号
-        strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        try:
+            print(f"正在测试参数组合：{params}")
+            # 生成当前参数下的信号
+            strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-        # 运行回测
-        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+            # 运行回测
+            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-        # 获取净值序列
-        pv = strat.get_net_value_series()
+            # 获取净值序列
+            pv = strat.get_net_value_series()
 
-        # 计算绩效指标
-        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+            # 计算绩效指标
+            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-        # 收集指标和参数
-        result_entry = {k: v for k, v in params.items()}
-        result_entry.update(metrics)
-        result_entry=pd.DataFrame(result_entry)
-        results.append(result_entry)
+            # 收集指标和参数
+            result_entry = {k: v for k, v in params.items()}
+            result_entry.update(metrics)
+            result_entry=pd.DataFrame(result_entry)
+            results.append(result_entry)
+
+        except:
+
+            printprint(f"参数组合出现错误：{params}")
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -368,15 +335,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(5, 30,2),
-    'window_2':range(20,50,2),
+    'window_1': range(10, 101,10),
+    'window_2':range(20,201,10),
 }
 
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=EMA,
-#     strategy_class=EMA_Strategy,
+#     strategy_function=BBS,
+#     strategy_class=BBS_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
