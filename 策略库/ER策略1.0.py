@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import talib
 
-def KAMA(target_assets, paths,window_1=20,window_2=40):
+def ER(target_assets, paths,window_1=10):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -21,11 +21,23 @@ def KAMA(target_assets, paths,window_1=20,window_2=40):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
+
+        close = df["close"]    
+        low = df["low"]
+        high = df["high"]
+
+        # 计算收盘价的指数移动平均线（EMA）
+        close_ema = close.ewm(window_1).mean()
+
+        # 计算BullPower和BearPower
+        bull_power = high - close_ema
+        bear_power = low - close_ema
         # 计算
-        df["var_1"] = talib.KAMA(df['close'],window_1)
-        df["var_2"] = talib.KAMA(df['close'],window_2)
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = 0
+        df["var_1"] = bull_power
+        df["var_2"] = bear_power
+        df["var_3"] = 0
+        df.loc[(df["var_2"].shift(1) <= df["var_3"].shift(1)) & (df["var_2"] > df["var_3"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]) , 'signal'] = -1
 
         # pos为空的，向上填充数字
         df['signal'].fillna(method='ffill', inplace=True)
@@ -50,7 +62,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class KAMA_Strategy(bt.Strategy):
+class ER_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -193,11 +205,11 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = KAMA(target_assets, paths)
+strategy_results,full_info = ER(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(KAMA_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(ER_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
@@ -307,15 +319,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 201,10),
-    'window_2':range(20,201,10),
+    'window_1': range(1, 30,1),
+    
 }
 
 # # 运行参数优化
 results_df = parameter_optimization(
     parameter_grid=parameter_grid,
-    strategy_function=KAMA,
-    strategy_class=KAMA_Strategy,
+    strategy_function=ER,
+    strategy_class=ER_Strategy,
     target_assets=target_assets,
     paths=paths,
     cash=10000000,

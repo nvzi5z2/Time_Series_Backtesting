@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import talib
 
-def KAMA(target_assets, paths,window_1=20,window_2=40):
+def KAMA(target_assets, paths,window_1=20,window_2=50):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -307,19 +307,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 201,10),
-    'window_2':range(20,201,10),
+    'window_1': range(10, 70,10),
+    'window_2':range(10,120,10),
 }
 
-# # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=KAMA,
-    strategy_class=KAMA_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0005,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# # # 运行参数优化
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=KAMA,
+#     strategy_class=KAMA_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0005,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )
