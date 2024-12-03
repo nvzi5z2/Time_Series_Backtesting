@@ -238,7 +238,7 @@ strategy_results,full_info = UDVD_River(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_River_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(UDVD_River_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 

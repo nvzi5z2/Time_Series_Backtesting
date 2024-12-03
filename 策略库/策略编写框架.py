@@ -196,11 +196,15 @@ strategy_results,full_info = EMA(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
+
 #输出策略净值
+
+strtegy_name='EMA'
+
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')

@@ -7,10 +7,9 @@ from itertools import product
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
 
-def ADX(target_assets, paths,window_1=28):
+def UDVD(target_assets, paths,window_1=34):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,38 +21,22 @@ def ADX(target_assets, paths,window_1=28):
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
         df=daily_data.copy()
-        #
-        df['high_low'] = df['high'] - df['low']
-        df['high_close'] = np.abs(df['high'] - df['close'].shift())
-        df['low_close'] = np.abs(df['low'] - df['close'].shift())
-        df['TR'] = df[['high_low', 'high_close', 'low_close']].max(axis=1)
-        
-        # 计算 Directional Movement (+DM 和 -DM)
-        df['+DM'] = np.where((df['high'] > df['high'].shift()) & 
-                            (df['high'] - df['high'].shift() > df['low'].shift() - df['low']), 
-                            df['high'] - df['high'].shift(), 0)
-        df['-DM'] = np.where((df['low'].shift() > df['low']) & 
-                            (df['low'].shift() - df['low'] > df['high'] - df['high'].shift()), 
-                            df['low'].shift() - df['low'], 0)
-        
-        # 平滑 +DM, -DM 和 TR
-        df['smoothed+DM'] = df['+DM'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['smoothed-DM'] = df['-DM'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['smoothed_TR'] = df['TR'].ewm(alpha=1/window_1, adjust=False).mean()
-        
-        # 计算 +DI 和 -DI，衡量正向和负向运动的强度
-        df['+DI'] = 100 * (df['smoothed+DM'] / df['smoothed_TR'])
-        df['-DI'] = 100 * (df['smoothed-DM'] / df['smoothed_TR'])
-        
-        # 计算 DX 和 ADX，ADX 表示趋势的强度，不考虑趋势的方向
-        
-        df['DX'] = 100 * np.abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])
-        df['ADX'] = df['DX'].ewm(alpha=1/window_1, adjust=False).mean()
-        df['signal'] = 0
+        close = df["close"]
+        open = df['open']    
+        low = df["low"]
+        high = df["high"]
+        volume = df['volume']
+        # 计算
+        volup = (high-open)/open
+        voldown = (open-low)/open
+        ud= volup - voldown
 
-        #看多为1，看空为-1
-        df.loc[df['+DI'] > df['-DI'], 'signal'] = 1
-        df.loc[df['+DI'] < df['-DI'], 'signal'] = -1
+        df["var_1"] = ud.rolling(window_1).mean()
+        df["var_2"] =0
+        # 添加信号列
+        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] >= df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = -1
+        df['signal'].fillna(method='ffill', inplace=True)
         result=df
 
         # 将信号合并回每日数据
@@ -74,8 +57,8 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
         ('signal', -1),  # 默认情况下，'signal' 列在最后一列   
     )
 
-# 策略类，包含资产仓位设置、调试信息和导出方法
-class ADX_Strategy(bt.Strategy):
+# 策略类，包含调试信息和导出方法
+class UDVD_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.16),  # 每个资产的仓位百分比
     )
@@ -165,7 +148,7 @@ class ADX_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -218,19 +201,19 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = ADX(target_assets, paths)
+strategy_results,full_info = UDVD(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(ADX_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# 获取净值序列
 index_price_path=paths['daily']
-AT.plot_results('000906.SH',index_price_path, portfolio_value, drawdown_ts, returns, metrics)
+# 获取净值序列
+AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
@@ -286,10 +269,12 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         # 收集指标和参数
         result_entry = {k: v for k, v in params.items()}
         result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
         results.append(result_entry)
 
     # 将结果转换为 DataFrame
-    results_df = pd.DataFrame(results)
+    results_df = pd.concat(results,axis=0)
+    results_df=results_df.dropna()
 
     # 可视化结果
     if len(param_names) == 1:
@@ -320,17 +305,16 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
-
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100, 2),
+    'window_1': range(10, 101, 10),
 }
 
 # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=ADX,
-#     strategy_class=ADX_Strategy,
+#     strategy_function=UDVD,
+#     strategy_class=UDVD_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,

@@ -111,7 +111,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class ADX_River_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.166),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -237,7 +237,7 @@ paths = {
     'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\策略净值序列"
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 # 资产列表
@@ -257,7 +257,7 @@ strategy_results,full_info = ADX_River(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 #获取净值
 pv=strat.get_net_value_series()

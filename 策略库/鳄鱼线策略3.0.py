@@ -300,7 +300,7 @@ class Alligator_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0000, slippage_perc=0.0000, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -336,6 +336,7 @@ paths = {
     'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 # # 资产列表
@@ -355,9 +356,14 @@ strategy_results,full_info = alligator_strategy_with_ao_and_fractal_macd(target_
 
 
 # 获取策略实例
-strat = run_backtest(Alligator_Strategy,target_assets,10000000)
+strat = run_backtest(Alligator_Strategy,target_assets,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
+
+strtegy_name='EMA'
+
+pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
+
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
