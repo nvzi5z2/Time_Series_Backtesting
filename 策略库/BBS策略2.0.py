@@ -79,9 +79,32 @@ def BBS_MACD(target_assets, paths,window_1=174):
         df['MACD_signal'] = df.apply(macd_generate_signal, axis=1)
         
         macd_df=df[['MACD_signal']]
+        bbs_signal=total[['signal']]
+
+        result=pd.merge(bbs_signal,macd_df,right_index=True,left_index=True)
         
+        result.columns=['BBS_signal','MACD_signal']
+        
+        result['signal'] = 0
+        
+        for i in range(len(result)):
+            long_condition = (result['BBS_signal'][i] == 1 and result['MACD_signal'][i] != -1 )
+
+            short_condition = (result['BBS_signal'][i] == -1 or
+                            result['MACD_signal'][i] == -1 )
+            
+            if long_condition and short_condition:  # 同时触发多空信号
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0  # 延续上一周期信号
+            elif long_condition:
+                result['signal'][i] = 1  # 看多
+            elif short_condition:
+                result['signal'][i] = -1  # 看空
+            else:
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0 # 延续上一周期信号
+
+
         # 将信号合并回每日数据
-        daily_data = daily_data.join(total[['signal']], how='left')
+        daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
         daily_data=daily_data.dropna()
 
@@ -245,7 +268,7 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = BBS(target_assets, paths)
+strategy_results,full_info = BBS_MACD(target_assets, paths)
 
 
 # 获取策略实例
@@ -253,7 +276,7 @@ strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0.0005
 
 pv=strat.get_net_value_series()
 
-strtegy_name='BBS_Strategy'
+strtegy_name='BBS_MACD_Strategy'
 
 #输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
