@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import talib
 
-def KAMA(target_assets, paths,window_1=20,window_2=40):
+def KAMA(target_assets, paths,window_1=20,window_2=50):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -178,9 +178,7 @@ paths = {
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
-
 
 # 资产列表
 target_assets = [
@@ -199,27 +197,14 @@ strategy_results,full_info = KAMA(target_assets, paths)
 
 
 # 获取策略实例
-<<<<<<< HEAD
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
-=======
 strat = run_backtest(KAMA_Strategy,target_assets,strategy_results,10000000,0,0)
->>>>>>> origin/main
 
 pv=strat.get_net_value_series()
-
-
-#输出策略净值
-
-strtegy_name='EMA'
-
-pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-index_price_path=paths['daily']
-
-AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
+AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
@@ -280,11 +265,7 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
         except:
 
-<<<<<<< HEAD
             print(f"参数组合出现错误：{params}")
-=======
-            printprint(f"参数组合出现错误：{params}")
->>>>>>> origin/main
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -326,24 +307,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 201,10),
-    'window_2':range(20,201,10),
+    'window_1': range(10, 70,10),
+    'window_2':range(10,120,10),
 }
 
-# # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-<<<<<<< HEAD
-    strategy_function=KAMA,
-    strategy_class=KAMA_Strategy,
-=======
-    strategy_function=EMA,
-    strategy_class=EMA_Strategy,
->>>>>>> origin/main
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0005,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# # # 运行参数优化
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=KAMA,
+#     strategy_class=KAMA_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0005,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )

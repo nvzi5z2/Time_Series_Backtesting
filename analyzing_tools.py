@@ -425,6 +425,11 @@ class Analyzing_Tools():
         # 假设 drawdown_ts 和 returns 是 DataFrame，转换为 Series
         drawdown_ts = drawdown_ts[drawdown_ts.columns[0]]
         returns = returns[returns.columns[0]]
+<<<<<<< HEAD
+        # 读取基准指数价格数据
+        index_price_path = r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据'
+=======
+>>>>>>> origin/main
         benchmark_data = pd.read_csv(index_price_path + '\\' + benchmark_code + '.csv', index_col=[0])
 
         # 确保时间列是 datetime 格式
