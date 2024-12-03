@@ -214,7 +214,6 @@ def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commi
 #加载分析工具
 AT=Analyzing_Tools()
 
-
 # 定义数据路径
 paths = {
     'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
@@ -239,14 +238,16 @@ strategy_results,full_info = UDVD_River(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(UDVD_River_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
+index_price_path=paths['daily']
+
+AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
@@ -285,25 +286,24 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        try:
-            print(f"正在测试参数组合：{params}")
-            # 生成当前参数下的信号
-            strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-            # 运行回测
-            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-            # 获取净值序列
-            pv = strat.get_net_value_series()
+        # 获取净值序列
+        pv = strat.get_net_value_series()
 
-            # 计算绩效指标
-            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-            # 收集指标和参数
-            result_entry = {k: v for k, v in params.items()}
-            result_entry.update(metrics)
-            result_entry=pd.DataFrame(result_entry)
-            results.append(result_entry)
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
+        results.append(result_entry)
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)

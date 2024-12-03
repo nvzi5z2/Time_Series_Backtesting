@@ -6,14 +6,14 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
 
-def KAMA(target_assets, paths,window_1=20,window_2=40):
+def BBS(target_assets, paths,window_1=220):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
     full_info={}
-    
+    free_turn_path=paths['free_turn_path']
+
     #编写策略主体部分
     for code in target_assets:
         # 读取数据
@@ -21,24 +21,44 @@ def KAMA(target_assets, paths,window_1=20,window_2=40):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
-        # 计算
-        df["var_1"] = talib.KAMA(df['close'],window_1)
-        df["var_2"] = talib.KAMA(df['close'],window_2)
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = 0
+        code=df.iloc[0,0]
+        def get_free_turn_data(code,free_turn_path):
+            file = r"D:\数据库\同花顺指数自由流通换手率"
 
-        # pos为空的，向上填充数字
-        df['signal'].fillna(method='ffill', inplace=True)
+            filename = file + '\\' + code + '.csv'
 
-        result=df
+            data = pd.read_csv(filename, index_col=[0])
+
+            data.index=pd.to_datetime(data.index)
+
+            data=data[["ths_free_turnover_ratio_index"]]
+
+            data.columns=["换手率（基于自由流通市值）"]
+
+            data = data / 100
+
+            return data
+        
+        free_turn=get_free_turn_data(code,free_turn_path).dropna()
+        free_turn.index=pd.to_datetime(free_turn.index)
+        total=pd.merge(df,free_turn,right_index=True,left_index=True)
+        total.loc[:,"free_turn_ma"]=total['换手率（基于自由流通市值）'].rolling(window_1).mean()
+        total.loc[:,"pct"]=total['close'].pct_change()
+        total.loc[:,"std"]=total['pct'].rolling(window_1).std()
+        total['bull_bear']=total['std']/total['free_turn_ma']
+        total['short_MA']=total['bull_bear'].rolling(20).mean()
+        total['long_MA']=total['bull_bear'].rolling(60).mean()
+        total['diff']=total['short_MA']-total['long_MA']
+        # 添加signal列，使用apply函数
+        total['signal'] = total['diff'].apply(lambda x: -1 if x > 0 else 1)
         # 将信号合并回每日数据
-        daily_data = daily_data.join(result[['signal']], how='left')
+        daily_data = daily_data.join(total[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
         daily_data=daily_data.dropna()
 
         # 存储结果
         results[code] = daily_data
-        full_info[code]=result
+        full_info[code]=total
 
     return results,full_info
 
@@ -50,7 +70,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class KAMA_Strategy(bt.Strategy):
+class BBS_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -175,9 +195,8 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'free_turn_path':r"D:\数据库\同花顺指数自由流通换手率",
     'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
@@ -195,13 +214,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = KAMA(target_assets, paths)
+strategy_results,full_info = BBS(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(KAMA_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
+
+strtegy_name='BBS_Strategy'
 
 #输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
@@ -272,11 +293,7 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
         except:
 
-<<<<<<< HEAD
-            print(f"参数组合出现错误：{params}")
-=======
             printprint(f"参数组合出现错误：{params}")
->>>>>>> origin/main
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -318,24 +335,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 201,10),
+    'window_1': range(10, 101,10),
     'window_2':range(20,201,10),
 }
 
-# # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-<<<<<<< HEAD
-    strategy_function=KAMA,
-    strategy_class=KAMA_Strategy,
-=======
-    strategy_function=EMA,
-    strategy_class=EMA_Strategy,
->>>>>>> origin/main
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0005,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# # # 运行参数优化
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=BBS,
+#     strategy_class=BBS_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0005,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )

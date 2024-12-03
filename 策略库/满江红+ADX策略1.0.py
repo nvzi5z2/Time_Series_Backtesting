@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def EMA(target_assets, paths,window_1=28):
+def ADX_River(target_assets, paths,window_1=28):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -109,7 +109,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class EMA_Strategy(bt.Strategy):
+class ADX_River_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -234,9 +234,10 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\策略净值序列"
 }
 
 # 资产列表
@@ -249,21 +250,27 @@ target_assets = [
     "399303.SZ"
 ]
 
-
+strtegy_name='ADX_River'
 
 # 生成信号
-strategy_results,full_info = EMA(target_assets, paths)
+strategy_results,full_info = ADX_River(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0,0)
 
+#获取净值
 pv=strat.get_net_value_series()
+
+#输出策略名称
+pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
+index_price_path=paths['daily']
+
+AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
