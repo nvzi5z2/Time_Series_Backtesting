@@ -6,9 +6,9 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
+import talib
 
-def UDVD_River(target_assets, paths,window_1=34):
+def MOM(target_assets,paths,window_1=30):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,56 +22,15 @@ def UDVD_River(target_assets, paths,window_1=34):
 
         df=daily_data.copy()
         # 计算
-        close = df["close"]
-        open = df['open']    
-        low = df["low"]
-        high = df["high"]
-        volume = df['volume']
-        #满江红策略
-        # 保留一位小数
-        df = df.round(0)
+        close = df["close"]  
+        df["var_1"] = talib.MOM(close, window_1)
+        df["var_2"] = 0
+        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = -1
 
-        #信号触发
-        # 计算每日涨跌幅
-        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
-        
-        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
-        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
-        
-        #涨跌幅连续十天符合
-        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window=10).sum()
+        # pos为空的，向上填充数字
+        df['signal'].fillna(method='ffill', inplace=True)
 
-        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
-        
-        df['连续红K线'] = (df['close'] > df['open']).astype(int)
-        
-        df['连续红K线'] = df['连续红K线'].rolling(window=10).sum()
-        #合并所有信息，上下信息
-        df['diff'] = ((df['连续涨跌幅']==10) & 
-                    (df['连续红K线'] >= 7)).astype(int)
-        # 添加signal列，使用apply函数
-        df['signal_1'] = -1  # 初始化 signal 列为 -1
-
-        for i in range(len(df)):
-            if df['diff'][i] > 0:
-                for j in range(i, min(i + 2, len(df))):  # 循环处理当天及未来四天
-                    df['signal_1'][j] = 1
-        
-        #ADX策略
-        # 计算
-        volup = (high-open)/open
-        voldown = (open-low)/open
-        ud= volup - voldown
-
-        df["var_1"] = ud.rolling(window_1).mean()
-        df["var_2"] =0
-        # 添加信号列
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] >= df["var_2"]) , 'signal_2'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal_2'] = -1
-        df['signal_2'].fillna(method='ffill', inplace=True)
-        df['signal_sum']=df['signal_1']+df['signal_2']
-        # 添加signal列，使用apply函数
-        df['signal'] = df['signal_sum'].apply(lambda x: 1 if x > -2 else -1)
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
@@ -92,7 +51,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UDVD_River_Strategy(bt.Strategy):
+class MOM_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -214,12 +173,15 @@ def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commi
 #加载分析工具
 AT=Analyzing_Tools()
 
+
 # 定义数据路径
 paths = {
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
 }
+
 
 # 资产列表
 target_assets = [
@@ -234,13 +196,18 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UDVD_River(target_assets, paths)
+strategy_results,full_info = MOM(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_River_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(MOM_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
+
+strtegy_name='MOM_Strategy'
+
+#输出策略净值
+pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
@@ -286,24 +253,29 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        print(f"正在测试参数组合：{params}")
-        # 生成当前参数下的信号
-        strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        try:
+            print(f"正在测试参数组合：{params}")
+            # 生成当前参数下的信号
+            strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-        # 运行回测
-        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+            # 运行回测
+            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-        # 获取净值序列
-        pv = strat.get_net_value_series()
+            # 获取净值序列
+            pv = strat.get_net_value_series()
 
-        # 计算绩效指标
-        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+            # 计算绩效指标
+            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-        # 收集指标和参数
-        result_entry = {k: v for k, v in params.items()}
-        result_entry.update(metrics)
-        result_entry=pd.DataFrame(result_entry)
-        results.append(result_entry)
+            # 收集指标和参数
+            result_entry = {k: v for k, v in params.items()}
+            result_entry.update(metrics)
+            result_entry=pd.DataFrame(result_entry)
+            results.append(result_entry)
+
+        except:
+
+            print(f"参数组合出现错误：{params}")
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -345,15 +317,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(5, 30,2),
-    'window_2':range(20,50,2),
+    'window_1': range(1, 100,5),
+    #'window_2':range(20,201,10),
 }
 
-# # # 运行参数优化
+# # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=EMA,
-#     strategy_class=EMA_Strategy,
+#     strategy_function=MOM,
+#     strategy_class=MOM_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,

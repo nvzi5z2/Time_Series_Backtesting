@@ -234,10 +234,10 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\策略净值序列"
+    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
 }
 
 # 资产列表
@@ -257,7 +257,7 @@ strategy_results,full_info = ADX_River(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(ADX_River_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 #获取净值
 pv=strat.get_net_value_series()
