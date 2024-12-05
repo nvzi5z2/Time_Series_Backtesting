@@ -227,26 +227,12 @@ strategy_results,full_info = PCR(target_assets, paths)
 
 
 # 获取策略实例
-<<<<<<< HEAD
 strat = run_backtest(PCR_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
 strtegy_name='PCR_Strategy'
-=======
-<<<<<<< HEAD
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
-=======
-strat = run_backtest(KAMA_Strategy,target_assets,strategy_results,10000000,0,0)
->>>>>>> origin/main
 
-pv=strat.get_net_value_series()
-
->>>>>>> origin/main
-
-#输出策略净值
-
-strtegy_name='EMA'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
