@@ -183,9 +183,11 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+
 }
 
 # 资产列表
@@ -209,10 +211,16 @@ strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000,0.000
 
 pv=strat.get_net_value_series()
 
+strtegy_name='UDVD'
+
+pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
+
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
+index_price_path=paths['daily']
+
 # 获取净值序列
-AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
+AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()

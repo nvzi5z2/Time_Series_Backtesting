@@ -200,7 +200,7 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
 }
@@ -222,14 +222,15 @@ strategy_results,full_info = ADX(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(ADX_Strategy,target_assets,strategy_results,10000000)
+strat = run_backtest(ADX_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
 # 获取净值序列
-AT.plot_results('000906.SH',portfolio_value, drawdown_ts, returns, metrics)
+index_price_path=paths['daily']
+AT.plot_results('000906.SH',index_price_path, portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()

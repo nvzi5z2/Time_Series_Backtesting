@@ -111,7 +111,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class ADX_River_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.166),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -237,7 +237,11 @@ paths = {
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+<<<<<<< HEAD
     'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
+=======
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+>>>>>>> origin/main
 }
 
 # 资产列表

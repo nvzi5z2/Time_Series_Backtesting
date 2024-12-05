@@ -6,15 +6,14 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
-import numpy as np
 
-def PCR(target_assets,paths,window_1=50,window_2=5):
+def BBS_MACD(target_assets, paths,window_1=174):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
     full_info={}
-    
+    free_turn_path=paths['free_turn_path']
+
     #编写策略主体部分
     for code in target_assets:
         # 读取数据
@@ -22,51 +21,98 @@ def PCR(target_assets,paths,window_1=50,window_2=5):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
+        code=df.iloc[0,0]
 
-        # 计算M
-        m1 = int((window_1 / 2) + 1)
+        def get_free_turn_data(code,free_turn_path):
+            file = r"D:\数据库\同花顺指数自由流通换手率"
 
-        # 计算移动平均线
-        df['close_ma'] = df['close'].rolling(window_1).mean()
+            filename = file + '\\' + code + '.csv'
 
-        # 计算偏离值
-        df['dev'] = df['close'] - df['close_ma']
+            data = pd.read_csv(filename, index_col=[0])
 
-        # 计算正向偏离值和负向偏离值
-        df['devpos'] = np.where(df['dev'] > 0, df['dev'], 0)
-        df['devneg'] = np.where(df['dev'] < 0, -df['dev'], 0)
-        df['devpos'] = pd.Series(df['devpos'])
-        df['devneg'] = pd.Series(df['devneg'])
-        # 计算正向偏离值和负向偏离值的累积和
-        df['sumpos'] = df['devpos'].rolling(m1).sum()
-        df['sumneg'] = df['devneg'].rolling(m1).sum()
+            data.index=pd.to_datetime(data.index)
 
-        # 计算TII指标
-        df['tii'] = 100 * df['sumpos'] / (df['sumpos'] + df['sumneg'])
+            data=data[["ths_free_turnover_ratio_index"]]
 
-        # 计算TII信号线
-        df['tii_signal'] = df['tii'].ewm(window_2, adjust=False).mean()
+            data.columns=["换手率（基于自由流通市值）"]
 
-        # 计算
-        df["var_1"] = df['tii']
-        df["var_2"] = df['tii_signal']
+            data = data / 100
 
-        # 信号触发条件
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]), 'signal'] = -1
+            return data
+        
+        free_turn=get_free_turn_data(code,free_turn_path).dropna()
+        free_turn.index=pd.to_datetime(free_turn.index)
+        total=pd.merge(df,free_turn,right_index=True,left_index=True)
+        total.loc[:,"free_turn_ma"]=total['换手率（基于自由流通市值）'].rolling(window_1).mean()
+        total.loc[:,"pct"]=total['close'].pct_change()
+        total.loc[:,"std"]=total['pct'].rolling(window_1).std()
+        total['bull_bear']=total['std']/total['free_turn_ma']
+        total['short_MA']=total['bull_bear'].rolling(20).mean()
+        total['long_MA']=total['bull_bear'].rolling(60).mean()
+        total['diff']=total['short_MA']-total['long_MA']
+        # 添加signal列，使用apply函数
+        total['signal'] = total['diff'].apply(lambda x: -1 if x > 0 else 1)
 
-        # pos为空的，向上填充数字
-        df['signal'].fillna(method='ffill', inplace=True)
+        # 1. 计算快线（DIFF）和慢线（DEA）
+        df['ema_short'] = df['close'].ewm(span=12, adjust=False).mean()
+        df['ema_long'] = df['close'].ewm(span=26, adjust=False).mean()
+        df['diff'] = df['ema_short'] - df['ema_long']  # DIFF 快线
+        df['dea'] = df['diff'].ewm(span=9, adjust=False).mean()  # DEA 慢线
+        
+        # 2. 计算能量柱
+        df['macd_bar'] = (df['diff'] - df['dea']) * 2
 
-        result=df
+        # 添加macd信号列
+        def macd_generate_signal(row):
+            # 水上或零轴看多信号
+            if row['diff'] > row['dea'] and row['macd_bar'] >= 0:
+                return 1
+            # 水下或零轴看空信号
+            elif row['diff'] < row['dea'] and row['macd_bar'] <= 0:
+                return -1
+            # 无信号
+            else:
+                return 0
+
+                # 应用macd信号生成规则
+        
+        df['MACD_signal'] = df.apply(macd_generate_signal, axis=1)
+        
+        macd_df=df[['MACD_signal']]
+        bbs_signal=total[['signal']]
+
+        result=pd.merge(bbs_signal,macd_df,right_index=True,left_index=True)
+        
+        result.columns=['BBS_signal','MACD_signal']
+        
+        result['signal'] = 0
+        
+        for i in range(len(result)):
+            long_condition = (result['BBS_signal'][i] == 1 and result['MACD_signal'][i] != -1 )
+
+            short_condition = (result['BBS_signal'][i] == -1 or
+                            result['MACD_signal'][i] == -1 )
+            
+            if long_condition and short_condition:  # 同时触发多空信号
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0  # 延续上一周期信号
+            elif long_condition:
+                result['signal'][i] = 1  # 看多
+            elif short_condition:
+                result['signal'][i] = -1  # 看空
+            else:
+                result['signal'][i] = result['signal'][i - 1] if i > 0 else 0 # 延续上一周期信号
+
+
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
         daily_data=daily_data.dropna()
 
+
+
         # 存储结果
         results[code] = daily_data
-        full_info[code]=result
+        full_info[code]=total
 
     return results,full_info
 
@@ -78,7 +124,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class PCR_Strategy(bt.Strategy):
+class BBS_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -203,10 +249,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'free_turn_path':r"D:\数据库\同花顺指数自由流通换手率",
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
@@ -223,31 +268,17 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = PCR(target_assets, paths)
+strategy_results,full_info = BBS_MACD(target_assets, paths)
 
 
 # 获取策略实例
-<<<<<<< HEAD
-strat = run_backtest(PCR_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='PCR_Strategy'
-=======
-<<<<<<< HEAD
-strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
-=======
-strat = run_backtest(KAMA_Strategy,target_assets,strategy_results,10000000,0,0)
->>>>>>> origin/main
-
-pv=strat.get_net_value_series()
-
->>>>>>> origin/main
+strtegy_name='BBS_MACD_Strategy'
 
 #输出策略净值
-
-strtegy_name='EMA'
-
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -262,7 +293,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
@@ -316,7 +347,7 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
         except:
 
-            print(f"参数组合出现错误：{params}")
+            printprint(f"参数组合出现错误：{params}")
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -358,15 +389,14 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100,10),
-    'window_2':range(1,10,1),
+    'window_1': range(10, 251,2),
 }
 
-# # # 运行参数优化
+# # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=PCR,
-#     strategy_class=PCR_Strategy,
+#     strategy_function=BBS,
+#     strategy_class=BBS_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,

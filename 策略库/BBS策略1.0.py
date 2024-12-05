@@ -7,7 +7,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def BBS(target_assets, paths,window_1=220):
+def BBS(target_assets, paths,window_1=174):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,6 +22,7 @@ def BBS(target_assets, paths,window_1=220):
 
         df=daily_data.copy()
         code=df.iloc[0,0]
+
         def get_free_turn_data(code,free_turn_path):
             file = r"D:\数据库\同花顺指数自由流通换手率"
 
@@ -218,7 +219,7 @@ strategy_results,full_info = BBS(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0,0)
+strat = run_backtest(BBS_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
@@ -335,11 +336,10 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 101,10),
-    'window_2':range(20,201,10),
+    'window_1': range(10, 251,2),
 }
 
-# # # 运行参数优化
+# # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=BBS,
