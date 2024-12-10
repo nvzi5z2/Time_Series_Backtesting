@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import talib
 import numpy as np
+import talib as ta
 
-def full_red(target_assets,paths,window_1=10):
+def UD(target_assets,paths,window_1=20):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,33 +23,38 @@ def full_red(target_assets,paths,window_1=10):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
-        df = df.round(0)
-        #df['Date'] = pd.to_datetime(df['Date'])
-        #信号触发
-        # 计算每日涨跌幅
-        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
-        
-        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
-        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
-        
-        #涨跌幅连续十天符合
-        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window_1).sum()
 
-        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
-        
-        df['连续红K线'] = (df['close'] > df['open']).astype(int)
-        
-        df['连续红K线'] = df['连续红K线'].rolling(window_1).sum()
-        #合并所有信息，上下信息
-        df['diff'] = ((df['连续涨跌幅']==window_1) & 
-                    (df['连续红K线'] >= 7)).astype(int)
-        # 添加signal列，使用apply函数
-        df['signal'] = -1  # 初始化 signal 列为 -1
+        #将上涨、平、下跌数量和涨跌停数量合并
+        up_down=pd.read_csv(r'D:\1.工作文件\0.数据库\涨停跌停\001005010.csv')    
+        data = pd.read_csv(r'D:\1.工作文件\0.数据库\沪深涨跌家数.csv')
+        up_down['time'] = pd.to_datetime(up_down['time'])
+        data['time'] = pd.to_datetime(data['time'])
+        num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
+        num_df.set_index('time', inplace=True)
 
-        for i in range(len(df)):
-            if df['diff'][i] > 0:
-                for j in range(i, min(i + 3, len(df))):  # 循环处理当天及未来四天
-                    df['signal'][j] = 1
+        #和指数数据合并
+        merged_df = pd.merge(df, num_df[['ths_limit_up_stock_num_sector','ths_limit_down_stock_num_sector','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+        
+        #计算涨跌停剪刀差
+        merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
+        merged_df['涨停数量']=merged_df['ths_limit_up_stock_num_sector']
+        merged_df['跌停数量']=merged_df['ths_limit_down_stock_num_sector']
+        merged_df['涨跌停差']=(merged_df['涨停数量']-merged_df['跌停数量'])/merged_df['股票数量']
+        merged_df['涨跌停差'].fillna(method='ffill', inplace=True)
+        # 确保merged_df的索引唯一
+        merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
+
+        df['var_1'] = merged_df['涨跌停差']
+        df['var_2'] = -window_1/100
+        df['var_3']=0.02
+        # 根据条件生成信号值列
+        df.loc[(df["var_1"].shift(1) >= df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) < df["var_3"].shift(1)) & (df["var_1"] >= df["var_3"]) , 'signal'] = -1
+
+        # pos为空的，向上填充数字
+        df['signal'].fillna(method='ffill', inplace=True)
+
+
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
@@ -69,7 +75,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class V_MACD_Strategy(bt.Strategy):
+class UD_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -214,17 +220,17 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = V_MACD(target_assets, paths)
+strategy_results,full_info = UD(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(V_MACD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(UD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='V_MACD_Strategy'
+strtegy_name='UD_Strategy'
 
-
+#输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -335,15 +341,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(30, 50,1),
-    #'window_2':range(0,3,5),
+    'window_1': range(1, 20,1),
+    #'window_2':range(10,100,10),
 }
 
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=V_MACD,
-#     strategy_class=V_MACD_Strategy,
+#     strategy_function=UD,
+#     strategy_class=UD_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,

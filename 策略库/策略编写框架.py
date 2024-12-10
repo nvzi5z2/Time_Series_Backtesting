@@ -9,7 +9,7 @@ import seaborn as sns
 import talib
 import numpy as np
 
-def V_MACD(target_assets,paths,window_1=39,window_2=0):
+def full_red(target_assets,paths,window_1=10):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,32 +22,33 @@ def V_MACD(target_assets,paths,window_1=39,window_2=0):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
+        df = df.round(0)
+        #df['Date'] = pd.to_datetime(df['Date'])
+        #信号触发
+        # 计算每日涨跌幅
+        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
+        
+        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
+        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
+        
+        #涨跌幅连续十天符合
+        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window_1).sum()
 
-        volume = df['volume']
-        df['EMA_F'] =volume.ewm(12).mean()
-        df['EMA_S'] = volume.ewm(26).mean()
-        df['V_DIF'] = df['EMA_F'] - df['EMA_S']
-        df['V_DEA'] = df['V_DIF'].ewm(9).mean()
-        df['VMACD']=(df['V_DIF']-df['V_DEA'])*2
+        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
+        
+        df['连续红K线'] = (df['close'] > df['open']).astype(int)
+        
+        df['连续红K线'] = df['连续红K线'].rolling(window_1).sum()
+        #合并所有信息，上下信息
+        df['diff'] = ((df['连续涨跌幅']==window_1) & 
+                    (df['连续红K线'] >= 7)).astype(int)
+        # 添加signal列，使用apply函数
+        df['signal'] = -1  # 初始化 signal 列为 -1
 
-        #标准化处理
-        df['VMACD_mean'] = df['VMACD'].rolling(window_1).mean()
-        df['VMACD_std'] = df['VMACD'].rolling(window_1).std()
-        df['Z_VMACD'] = (df['VMACD'] - df['VMACD_mean']) / df['VMACD_std']
-        df['VMACD_MTM'] = df['Z_VMACD'].rolling(window_1).sum()
-
-        # 计算
-        df["var_1"] = df['VMACD_MTM']
-        df["var_2"] = window_2/10
-        df["var_3"] = -window_2/10
-
-        # 信号触发条件
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]), 'signal'] = -1
-
-        # pos为空的，向上填充数字
-        df['signal'].fillna(method='ffill', inplace=True)
-
+        for i in range(len(df)):
+            if df['diff'][i] > 0:
+                for j in range(i, min(i + 3, len(df))):  # 循环处理当天及未来四天
+                    df['signal'][j] = 1
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
