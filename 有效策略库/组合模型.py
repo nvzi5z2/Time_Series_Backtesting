@@ -450,9 +450,9 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.33, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.33, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.33, 'name': 'V_MACD', 'datas': V_MACD_results}
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.25, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.5, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'V_MACD', 'datas': V_MACD_results}
 ]
 
 def Portfolio(strategies,initial_cash=10000000):
@@ -545,7 +545,6 @@ Portfolio_nv = pf_nv[['Combined']].resample('D').last().dropna()
 
 #组合分析
 
-#加载分析工具
 AT=Analyzing_Tools()
 
 index_price_path=strategies_instance.paths['daily']
@@ -553,3 +552,5 @@ index_price_path=strategies_instance.paths['daily']
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfolio_nv, freq='D')
 
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
+
+debug_df
