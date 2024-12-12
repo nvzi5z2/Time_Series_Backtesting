@@ -360,7 +360,7 @@ strat = run_backtest(Alligator_Strategy,target_assets,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='EMA'
+strtegy_name=' alligator'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
