@@ -21,6 +21,7 @@ def UDVD(target_assets, paths,window_1=34):
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
         df=daily_data.copy()
+        df=df.loc["2021-01-04":,:]
         close = df["close"]
         open = df['open']    
         low = df["low"]
