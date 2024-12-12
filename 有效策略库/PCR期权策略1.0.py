@@ -9,7 +9,7 @@ import seaborn as sns
 import talib
 import numpy as np
 
-def V_MACD(target_assets,paths,window_1=39,window_2=0):
+def PCR(target_assets,paths,window_1=62):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -23,27 +23,32 @@ def V_MACD(target_assets,paths,window_1=39,window_2=0):
 
         df=daily_data.copy()
 
-        volume = df['volume']
-        df['EMA_F'] =volume.ewm(12).mean()
-        df['EMA_S'] = volume.ewm(26).mean()
-        df['V_DIF'] = df['EMA_F'] - df['EMA_S']
-        df['V_DEA'] = df['V_DIF'].ewm(9).mean()
-        df['VMACD']=(df['V_DIF']-df['V_DEA'])*2
+        data = pd.read_csv(r'D:\1.工作文件\0.数据库\sz50ETF期权数据.csv')
+        data['p02872_f001'] = pd.to_datetime(data['p02872_f001'])
+        
+        #按照时间升序排列
+        data= data.sort_values(by='p02872_f001')
+        data.set_index('p02872_f001', inplace=True)
+        #和指数数据合并
+        merged_df = pd.merge(df, data[['p02872_f005', 'p02872_f006']], left_index=True, right_index=True, how='left')        
+        # 向下填充'value'列的NaN值
+        #merged_df['p02872_f007'].fillna(method='ffill', inplace=True)
+        #计算PCR滚动五天的均值
+        merged_df['PCR']= merged_df['p02872_f006'].rolling(5).mean()/merged_df['p02872_f005'].rolling(5).mean()
+        # 定义一个函数来计算从小到大排列后排名第 70% 的值
+        def calc_70th_percentile(x):
+            return np.percentile(x, 70)
 
-        #标准化处理
-        df['VMACD_mean'] = df['VMACD'].rolling(window_1).mean()
-        df['VMACD_std'] = df['VMACD'].rolling(window_1).std()
-        df['Z_VMACD'] = (df['VMACD'] - df['VMACD_mean']) / df['VMACD_std']
-        df['VMACD_MTM'] = df['Z_VMACD'].rolling(window_1).sum()
+        # 使用 rolling 方法计算过去六十日从小到大排列后第 70 个百分位数
+        merged_df['rolloing_70%'] = merged_df['PCR'].rolling(window_1).apply(calc_70th_percentile, raw=True)
 
-        # 计算
-        df["var_1"] = df['VMACD_MTM']
-        df["var_2"] = window_2/10
-        df["var_3"] = -window_2/10
+        df['var_1'] = merged_df['PCR']
+        df['var_2'] = merged_df['rolloing_70%']
+
 
         # 信号触发条件
         df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]), 'signal'] = -1
+        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]), 'signal'] = -1
 
         # pos为空的，向上填充数字
         df['signal'].fillna(method='ffill', inplace=True)
@@ -68,9 +73,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class V_MACD_Strategy(bt.Strategy):
+class PCR_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.166),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -213,17 +218,17 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = V_MACD(target_assets, paths)
+strategy_results,full_info = PCR(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(V_MACD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(PCR_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='V_MACD_Strategy'
+strtegy_name='PCR_Strategy'
 
-
+#输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -334,15 +339,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(30, 50,1),
-    #'window_2':range(0,3,5),
+    'window_1': range(50, 120,1),
+    #'window_2':range(10,200,10),
 }
 
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=V_MACD,
-#     strategy_class=V_MACD_Strategy,
+#     strategy_function=PCR,
+#     strategy_class=PCR_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
