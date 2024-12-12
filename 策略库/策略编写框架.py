@@ -9,7 +9,7 @@ import seaborn as sns
 import talib
 import numpy as np
 
-def full_red(target_assets,paths,window_1=10):
+def DEMAKER(target_assets,paths,window_1=80):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -23,32 +23,34 @@ def full_red(target_assets,paths,window_1=10):
 
         df=daily_data.copy()
         df = df.round(0)
-        #df['Date'] = pd.to_datetime(df['Date'])
-        #信号触发
-        # 计算每日涨跌幅
-        df['涨跌幅'] = (df['close'] - df['open']) / df['open']
-        
-        # 如果每日涨跌幅在-0.02到0.03之间，则为1，否则为0
-        df['涨跌幅标记'] = ((df['涨跌幅'] >= -0.02) & (df['涨跌幅'] <= 0.03)).astype(int)
-        
-        #涨跌幅连续十天符合
-        df['连续涨跌幅']=df['涨跌幅标记'].rolling(window_1).sum()
+        # 使用需要的列，通常是高、低、收盘价
+        close = df["close"]    
+        low = df["low"]
+        open= df['open']
+        high = df["high"]
+        volume = df['volume']
 
-        # 连续红K线条件：最近10个交易日中至少有7根或以上的K线收红
-        
-        df['连续红K线'] = (df['close'] > df['open']).astype(int)
-        
-        df['连续红K线'] = df['连续红K线'].rolling(window_1).sum()
-        #合并所有信息，上下信息
-        df['diff'] = ((df['连续涨跌幅']==window_1) & 
-                    (df['连续红K线'] >= 7)).astype(int)
-        # 添加signal列，使用apply函数
-        df['signal'] = -1  # 初始化 signal 列为 -1
+        # 计算 Demax。
+        df['demax'] = high - high.shift(1)
+        df['demax'] = df['demax'].where(df['demax'] > 0, 0)
 
-        for i in range(len(df)):
-            if df['diff'][i] > 0:
-                for j in range(i, min(i + 3, len(df))):  # 循环处理当天及未来四天
-                    df['signal'][j] = 1
+        # 计算 Demin。
+        df['demin'] = low.shift(1) - low
+        df['demin'] = df['demin'].where(df['demin'] > 0, 0)
+
+        # 计算 Demaker。
+        df['demaker'] = df['demax'].ewm(window_1).mean() / (df['demax'].ewm(window_1).mean() + df['demin'].ewm(window_1).mean())
+        
+        df["var_1"] = df['demaker']
+        df["var_2"] = 0.6
+        df["var_3"] = 0.4
+        
+        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]) , 'signal'] = -1
+
+        # pos为空的，向上填充数字
+        df['signal'].fillna(method='ffill', inplace=True)
+
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
@@ -69,7 +71,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class V_MACD_Strategy(bt.Strategy):
+class DEMAKER_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -214,15 +216,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = V_MACD(target_assets, paths)
+strategy_results,full_info = DEMAKER(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(V_MACD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(DEMAKER_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='V_MACD_Strategy'
+strtegy_name='DEMAKER_Strategy'
 
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
@@ -335,19 +337,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(30, 50,1),
+    'window_1': range(10, 100,10),
     #'window_2':range(0,3,5),
 }
 
 # # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=V_MACD,
-#     strategy_class=V_MACD_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=DEMAKER,
+    strategy_class=DEMAKER_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0005,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)

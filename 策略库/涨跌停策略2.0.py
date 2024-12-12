@@ -10,7 +10,7 @@ import talib
 import numpy as np
 import talib as ta
 
-def UD(target_assets,paths,window_1=20):
+def UD(target_assets,paths,window_1=19):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -45,8 +45,8 @@ def UD(target_assets,paths,window_1=20):
         merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
 
         df['var_1'] = merged_df['涨跌停差']
-        df['var_2'] = -window_1/100
-        df['var_3']=0.02
+        df['var_2'] = -0.2
+        df['var_3']=window_1/1000
         # 根据条件生成信号值列
         df.loc[(df["var_1"].shift(1) >= df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = 1
         df.loc[(df["var_1"].shift(1) < df["var_3"].shift(1)) & (df["var_1"] >= df["var_3"]) , 'signal'] = -1
@@ -245,7 +245,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+#AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
@@ -341,11 +341,11 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(1, 20,1),
+    'window_1': range(1, 30,1),
     #'window_2':range(10,100,10),
 }
 
-# # # 运行参数优化
+# # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=UD,

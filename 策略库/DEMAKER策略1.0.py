@@ -8,9 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import talib
 import numpy as np
-import talib as ta
 
-def UD(target_assets,paths,window_1=30,window_2=100):
+def DEMAkER(target_assets,paths,window_1=19):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -23,56 +22,35 @@ def UD(target_assets,paths,window_1=30,window_2=100):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
+        df = df.round(0)
+        # 使用需要的列，通常是高、低、收盘价
+        close = df["close"]    
+        low = df["low"]
+        open= df['open']
+        high = df["high"]
+        volume = df['volume']
 
-        #将上涨、平、下跌数量和涨跌停数量合并
-        up_down=pd.read_csv(r'D:\1.工作文件\0.数据库\涨停跌停\001005010.csv')    
-        data = pd.read_csv(r'D:\1.工作文件\0.数据库\沪深涨跌家数.csv')
-        up_down['time'] = pd.to_datetime(up_down['time'])
-        data['time'] = pd.to_datetime(data['time'])
-        num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
-        num_df.set_index('time', inplace=True)
+        # 计算 Demax。
+        df['demax'] = high - high.shift(1)
+        df['demax'] = df['demax'].where(df['demax'] > 0, 0)
 
-        #和指数数据合并
-        merged_df = pd.merge(df, num_df[['ths_limit_up_stock_num_sector','ths_limit_down_stock_num_sector','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+        # 计算 Demin。
+        df['demin'] = low.shift(1) - low
+        df['demin'] = df['demin'].where(df['demin'] > 0, 0)
+
+        # 计算 Demaker。
+        df['demaker'] = df['demax'].(window_1).mean() / (df['demax'].rolling(window_1).mean() + df['demin'].rolling(window_1).mean())
         
-        #计算涨跌停剪刀差
-        merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
-        merged_df['涨停数量']=merged_df['ths_limit_up_stock_num_sector']
-        merged_df['跌停数量']=merged_df['ths_limit_down_stock_num_sector']
-        merged_df['涨跌停差']=(merged_df['涨停数量']-merged_df['跌停数量'])/merged_df['股票数量']
-
-        # 计算AMA
-        merged_df['AMA_30'] = merged_df['涨跌停差'].ewm(window_1).mean()
-        merged_df['AMA_100'] = merged_df['涨跌停差'].ewm(window_2).mean()
-        merged_df['AMA']=merged_df['AMA_30']/merged_df['AMA_100']
-
-
-        merged_df['ration']=merged_df['AMA']
-        # 确保merged_df的索引唯一
-        merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
-
-        df['var_1'] = merged_df['ration']
-        df['var_2'] = 1.15
-        df['var_3']=merged_df['AMA_30']
-        df['var_4']=merged_df['AMA_100']
-
-        # 根据条件生成信号值列
-        df['signal_1'] = -1  # 初始化信号列为 -1
-        condition = (df['var_1'] > df['var_2']) & (df['var_3'] > 0) & (df['var_4'] > 0)
-        df.loc[condition, 'signal_1'] = 1
+        df["var_1"] = df['demaker']
+        df["var_2"] = 0.6
+        df["var_3"] = 0.4
         
-        df['var_5'] = merged_df['涨跌停差']
-        df['var_6'] = -0.2
-        df['var_7']=0.019
-        # 根据条件生成信号值列
-        df.loc[(df["var_5"].shift(1) >= df["var_6"].shift(1)) & (df["var_5"] < df["var_6"]) , 'signal_2'] = 1
-        df.loc[(df["var_5"].shift(1) < df["var_7"].shift(1)) & (df["var_5"] >= df["var_7"]) , 'signal_2'] = -1
+        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]) , 'signal'] = -1
+
         # pos为空的，向上填充数字
-        df['signal_2'].fillna(method='ffill', inplace=True)
+        df['signal'].fillna(method='ffill', inplace=True)
 
-        df['signal_sum']=df['signal_1']+df['signal_2']
-        # 添加signal列，使用apply函数
-        df['signal'] = df['signal_sum'].apply(lambda x: 1 if x >= 0 else -1)
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
@@ -93,7 +71,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UD_Strategy(bt.Strategy):
+class DEMAkER_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.166),  # 每个资产的仓位百分比
     )
@@ -238,17 +216,17 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UD(target_assets, paths)
+strategy_results,full_info = DEMAkER(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(DEMAkER_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UD_Strategy'
+strtegy_name='DEMAkER_Strategy'
 
-#输出策略净值
+
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -359,15 +337,15 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100,10),
-    'window_2':range(10,100,10),
+    'window_1': range(1, 30,1),
+    #'window_2':range(0,3,5),
 }
 
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=UD,
-#     strategy_class=UD_Strategy,
+#     strategy_function=DEMAkER,
+#     strategy_class=DEMAkER_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
