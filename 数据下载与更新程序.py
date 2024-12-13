@@ -1412,139 +1412,6 @@ class Downloading_And_Updating_Data():
         # 如果当天所有交易时间都过了，返回下一个交易日的第一个交易时间 "09:45"
         next_trading_day = last_date + timedelta(days=1)
         return datetime.combine(next_trading_day, datetime.strptime("09:45", "%H:%M").time()).strftime("%Y-%m-%d %H:%M")
-
-    # def Update_High_Freq_Vol_Price_Data(self,End_Date, Export_Path, Interval=60):
-        """
-        更新高频数据 (小时级别)，确保数据不重复下载，并且增量更新。
-        
-        :param End_Date: 数据更新的结束时间（字符串格式 'YYYY-MM-DD HH:MM'）
-        :param Export_Path: 导出文件夹的路径
-        :param Interval: 数据的时间间隔，默认是 60 分钟（1 小时）
-        """
-        
-        os.chdir(Export_Path)  # 切换到数据存放的目录
-        
-        # 获取所有以 .csv 结尾的文件名，并去掉 .csv 后缀，生成股票代码列表
-        Code_List = [f.replace('.csv', '') for f in os.listdir(Export_Path) if f.endswith('.csv')]
-        
-        print("更新开始")
-        
-        if Interval==60:
-            # 使用 tqdm 显示进度条
-            for code in tqdm(Code_List):
-                try:
-                    file_path = os.path.join(Export_Path, f"{code}.csv")
-                    
-                    # 读取现有的 CSV 文件
-                    if os.path.exists(file_path):
-                        df_existing = pd.read_csv(file_path, parse_dates=['time'])
-                        df_existing.set_index('time', inplace=True)  # 确保 'time' 列作为索引
-                        
-                        # 获取最后一条数据的时间，并确保是 pd.Timestamp 类型
-                        last_time = pd.to_datetime(df_existing.index.max())
-                        
-                        # 获取下一个交易时间
-                        start_time = self.get_next_trading_time_1h(last_time)
-                        
-                        # 如果最后一条时间已经超过了指定的结束时间，则跳过更新
-                        if pd.to_datetime(start_time) > pd.to_datetime(End_Date):
-                            print(f"{code} 数据已经是最新的，跳过更新。")
-                            continue
-                    else:
-                        # 如果文件不存在，从头开始下载
-                        start_time = "2010-01-01 00:00"
-                        df_existing = pd.DataFrame()  # 空的 DataFrame 用于拼接
-
-                    # 调用 API 下载新数据，从 start_time 到 End_Date
-                    new_data = THS_HF(code, 'open;high;low;close;volume;amount', 
-                                    f'Fill:Original,Interval:{Interval}', start_time, End_Date).data
-
-                    # 确保 'time' 列存在，将其设置为索引
-                    if 'time' in new_data.columns:
-                        new_data.set_index('time', inplace=True)
-                        # 保留 'thscode' 列，不删除任何列
-                        # 如果 'thscode' 列存在，我们保留它
-
-                    # 如果没有新数据，跳过处理
-                    if new_data.empty:
-                        print(f"{code} 无新数据需要更新。")
-                        continue
-
-                    # 将新数据与旧数据拼接，并去重
-                    if not df_existing.empty:
-                        df_combined = pd.concat([df_existing, new_data])
-                    else:
-                        df_combined = new_data
-                    df_combined.index=pd.to_datetime(df_combined.index, format='mixed', errors='coerce')
-                    
-                    # 保存更新后的数据，确保 'time' 列作为索引
-                    df_combined.to_csv(file_path, index=True)  # index=True 保留时间索引
-                    print(f"{code} 数据更新成功。")
-                
-
-                except Exception as e:
-                    print(f"{code} 更新时出现错误: {e}")
-            
-            print("数据更新结束")
-        if Interval==15:
-            # 使用 tqdm 显示进度条
-            for code in tqdm(Code_List):
-                try:
-                    file_path = os.path.join(Export_Path, f"{code}.csv")
-                    
-                    # 读取现有的 CSV 文件
-                    if os.path.exists(file_path):
-                        df_existing = pd.read_csv(file_path, parse_dates=['time'])
-                        df_existing.set_index('time', inplace=True)  # 确保 'time' 列作为索引
-                        
-                        # 获取最后一条数据的时间，并确保是 pd.Timestamp 类型
-                        last_time = pd.to_datetime(df_existing.index.max())
-                        
-                        # 获取下一个交易时间
-                        start_time = self.get_next_trading_time_15min(last_time)
-                        
-                        # 如果最后一条时间已经超过了指定的结束时间，则跳过更新
-                        if pd.to_datetime(start_time) > pd.to_datetime(End_Date):
-                            print(f"{code} 数据已经是最新的，跳过更新。")
-                            continue
-                    else:
-                        # 如果文件不存在，从头开始下载
-                        start_time = "2010-01-01 00:00"
-                        df_existing = pd.DataFrame()  # 空的 DataFrame 用于拼接
-
-                    # 调用 API 下载新数据，从 start_time 到 End_Date
-                    new_data = THS_HF(code, 'open;high;low;close;volume;amount', 
-                                    f'Fill:Original,Interval:{Interval}', start_time, End_Date).data
-
-                    # 确保 'time' 列存在，将其设置为索引
-                    if 'time' in new_data.columns:
-                        new_data.set_index('time', inplace=True)
-                        # 保留 'thscode' 列，不删除任何列
-                        # 如果 'thscode' 列存在，我们保留它
-
-                    # 如果没有新数据，跳过处理
-                    if new_data.empty:
-                        print(f"{code} 无新数据需要更新。")
-                        continue
-
-                    # 将新数据与旧数据拼接，并去重
-                    if not df_existing.empty:
-                        df_combined = pd.concat([df_existing, new_data])
-                        df_combined = df_combined[~df_combined.index.duplicated(keep='last')]  # 去重并保留最新的数据
-                    else:
-                        df_combined = new_data
-                    
-                    #将数据调整为日期格式的索引
-                    df_combined.index=pd.to_datetime(df_combined.index, format='mixed', errors='coerce')
-
-                    # 保存更新后的数据，确保 'time' 列作为索引
-                    df_combined.to_csv(file_path, index=True)  # index=True 保留时间索引
-                    print(f"{code} 数据更新成功。")
-
-                except Exception as e:
-                    print(f"{code} 更新时出现错误: {e}")
-            
-            print("数据更新结束")
         
     def Update_High_Freq_Vol_Price_Data(self, End_Date, Export_Path, Interval=60):
         """
@@ -1683,6 +1550,92 @@ class Downloading_And_Updating_Data():
             
             print("数据更新结束")
 
+    def Downloading_ETF_Option_Data(self,Code_List,Begin_Date,End_Date,Export_Path):
+            # 期权code 上证50=510050 沪深300=510300 500ETF=510500 科创50ETF=588000 科创板50=588080
+
+            Export_Path=Export_Path
+
+            print("下载开始")
+
+            for i in range(0,len(Code_List)):
+
+                try:
+                    code=Code_List[i]+'O'
+                    sdate=Begin_Date.replace('-','')
+                    edate=End_Date.replace('-','')
+                    Data=THS_DR('p02872','qqbd='+code+';'+'sdate='+sdate+';'+'edate='+edate+';jys=212001;bdlx=基金;date=全部',
+                        'p02872_f001:Y,p02872_f002:Y,p02872_f003:Y,p02872_f004:Y,p02872_f005:Y,p02872_f006:Y,p02872_f007:Y,p02872_f008:Y,p02872_f009:Y,p02872_f010:Y,p02872_f014:Y,p02872_f011:Y,p02872_f015:Y,p02872_f016:Y,p02872_f017:Y',
+                        'format:dataframe').data
+                    
+                    Data=Data.set_index('p02872_f001',drop=True)
+
+                    Data=Data.sort_index()
+
+                    Data.to_csv(Export_Path+'\\'+Code_List[i]+".csv")
+
+                    print(str(i/len(Code_List)))
+                
+                except:
+
+                    print(Code_List[i]+"出现错误")
+
+            print("下载结束")
+
+    def Updating_ETF_Option(self,End_Date,Data_Path):
+
+        Data_Path=Data_Path
+
+        os.chdir(Data_Path)
+
+        List=os.listdir()
+
+        Doc_Number=len(List)
+
+        print("更新开始")
+
+        for i in range(0,Doc_Number):
+
+            try:
+
+                df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                df.index=pd.to_datetime(df.index)
+
+                if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                    New_Begin_Date=df.index[-1]+Day()
+
+                    New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                    code_original = List[i].replace('.csv', "")
+                    code=code_original+'O'
+                    code=Code_List[i]+'O'
+
+                    new_sdate=New_Begin_Date.replace('-','')
+                    new_edate=End_Date.replace('-','')
+
+                    new_data=THS_DR('p02872','qqbd='+code+';'+'sdate='+new_sdate+';'+'edate='+new_edate+';jys=212001;bdlx=基金;date=全部',
+                        'p02872_f001:Y,p02872_f002:Y,p02872_f003:Y,p02872_f004:Y,p02872_f005:Y,p02872_f006:Y,p02872_f007:Y,p02872_f008:Y,p02872_f009:Y,p02872_f010:Y,p02872_f014:Y,p02872_f011:Y,p02872_f015:Y,p02872_f016:Y,p02872_f017:Y',
+                        'format:dataframe').data
+                    new_data=new_data.set_index('p02872_f001',drop=True)
+                    new_data.index=pd.to_datetime(new_data.index)
+                    new_data=new_data.sort_index()
+                    Updated_Data=pd.concat([df,new_data],axis=0)
+
+                    Updated_Data.to_csv(List[i])
+
+                else:
+
+                    print("数据更新至最新")
+
+            except:
+
+                print(List[i]+"出现错误")
+
+        print("更新结束")
+
+        return
+
 
 
 
@@ -1692,57 +1645,57 @@ DUD=Downloading_And_Updating_Data()
 
 def Update_All(End_Date):
 
-    Price_Data_Path_1=r"D:\数据库\同花顺指数量价数据"
+    Price_Data_Path_1=r"E:\数据库\同花顺指数量价数据"
 
-    Price_Data_Path_2=r"D:\数据库\同花顺ETF跟踪指数量价数据\1d"
+    Price_Data_Path_2=r"E:\数据库\同花顺ETF跟踪指数量价数据\1d"
 
-    Price_Data_Path_3=r'D:\数据库\同花顺ETF量价数据'
+    Price_Data_Path_3=r'E:\数据库\同花顺ETF量价数据'
 
-    Price_Data_Path_4=r'D:\数据库\同花顺商品指数量价数据'
+    Price_Data_Path_4=r'E:\数据库\同花顺商品指数量价数据'
 
     Path_List=[Price_Data_Path_1,Price_Data_Path_2,Price_Data_Path_3,Price_Data_Path_4]
 
     DUD.Updating_All_Market_Vol_Data(End_Date,Path_List)
 
-    Forcast_Path=r"D:\数据库\同花顺ETF跟踪指数一致预期数据\预测净利润两年复合增长"
+    Forcast_Path=r"E:\数据库\同花顺ETF跟踪指数一致预期数据\预测净利润两年复合增长"
 
     DUD.Updating_Forcast_2yr_Data(End_Date,Forcast_Path)
 
-    Free_Turn_Path=r"D:\数据库\同花顺指数自由流通换手率"
+    Free_Turn_Path=r"E:\数据库\同花顺指数自由流通换手率"
 
     DUD.Updating_Index_Free_Turn_Data(End_Date,Free_Turn_Path)
 
-    Valuation_Path=r"D:\数据库\同花顺ETF跟踪指数估值数据"
+    Valuation_Path=r"E:\数据库\同花顺ETF跟踪指数估值数据"
 
     DUD.Updating_Index_Valuation_Data(End_Date,Valuation_Path)
 
-    EDB_Data_Path=r"D:\数据库\同花顺EDB数据"
+    EDB_Data_Path=r"E:\数据库\同花顺EDB数据"
 
     DUD.Update_EDB_Data(EDB_Data_Path,End_Date)
 
-    ETF_Option_Path=r"D:\数据库\另类数据\期权数据"
+    ETF_Option_Path=r"E:\数据库\另类数据\ETF期权数据"
 
-    DUD.Updating_ETF_Option_PCR(End_Date,ETF_Option_Path)
+    DUD.Updating_ETF_Option(End_Date,ETF_Option_Path)
 
-    A50_Path=r'D:\数据库\另类数据\A50期货数据'
+    A50_Path=r'E:\数据库\另类数据\A50期货数据'
 
     DUD.Updating_A50_Futures_Data(End_Date,A50_Path)
 
-    Forcast_Data_Path=r'D:\数据库\同花顺ETF跟踪指数一致预期数据\盈利预测综合值'
+    Forcast_Data_Path=r'E:\数据库\同花顺ETF跟踪指数一致预期数据\盈利预测综合值'
 
     DUD.Update_Index_Forcast_Data(End_Date,Forcast_Data_Path)
 
-    Cov_Bond_Path=r'D:\数据库\同花顺可转债数据'
+    Cov_Bond_Path=r'E:\数据库\同花顺可转债数据'
 
     DUD.Update_Cov_Bond_Vol_Price_Data(End_Date,Cov_Bond_Path)
 
-    H_L_Path=r'D:\数据库\另类数据\新高新低'
+    H_L_Path=r'E:\数据库\另类数据\新高新低'
 
     DUD.Updating_newHL_Data(End_Date,H_L_Path)
 
-    Export_Path_60 = r'D:\数据库\同花顺ETF跟踪指数量价数据\1h' 
+    Export_Path_60 = r'E:\数据库\同花顺ETF跟踪指数量价数据\1h' 
 
-    Export_Path_15=r'D:\数据库\同花顺ETF跟踪指数量价数据\15min'
+    Export_Path_15=r'E:\数据库\同花顺ETF跟踪指数量价数据\15min'
 
     HF_End_Date=End_Date+' 15:00'
 
@@ -1753,47 +1706,5 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-# Update_All('2024-12-02')
+Update_All('2024-12-13')
 
-def Downloading_ETF_Option_Data(Code_List,Begin_Date,End_Date,Export_Path):
-    # 期权code 上证50=510050 沪深300=510300 500ETF=510500 科创50ETF=588000 科创板50=588080
-
-    Export_Path=Export_Path
-
-    print("下载开始")
-
-    for i in range(0,len(Code_List)):
-
-        try:
-            code=Code_List[i]+'O'
-            sdate=Begin_Date.replace('-','')
-            edate=End_Date.replace('-','')
-            Data=THS_DR('p02872','qqbd='+code+';'+'sdate='+sdate+';'+'edate='+edate+';jys=212001;bdlx=基金;date=全部',
-                'p02872_f001:Y,p02872_f002:Y,p02872_f003:Y,p02872_f004:Y,p02872_f005:Y,p02872_f006:Y,p02872_f007:Y,p02872_f008:Y,p02872_f009:Y,p02872_f010:Y,p02872_f014:Y,p02872_f011:Y,p02872_f015:Y,p02872_f016:Y,p02872_f017:Y',
-                'format:dataframe').data
-            
-            Data=Data.set_index('p02872_f001',drop=True)
-
-            Data=Data.sort_index()
-
-            Data.to_csv(Export_Path+'\\'+Code_List[i]+".csv")
-
-            print(str(i/len(Code_List)))
-        
-        except:
-
-            print(Code_List[i]+"出现错误")
-
-    print("下载结束")
-
-
-Code_List=['510050','510300','510500','588000','588080']
-
-Begin_Date='2019-01-04'
-
-End_Date='2024-12-13'
-
-Export_Path=r'D:\数据库\另类数据\ETF期权数据'
-
-
-Downloading_ETF_Option_Data(Code_List,Begin_Date,End_Date,Export_Path)
