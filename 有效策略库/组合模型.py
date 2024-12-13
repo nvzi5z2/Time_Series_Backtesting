@@ -114,7 +114,7 @@ class EqualWeightsStrategy(bt.Strategy):
         df.set_index('Date', inplace=True)
         return df
 
-#定义组合分析工具类
+#定义组合分析工具类，设置策略起始时间
 class Tools:
 
     def __init__(self):
@@ -630,9 +630,9 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.166, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.166, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.166, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.125, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.25, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.125, 'name': 'V_MACD', 'datas': V_MACD_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.50, 'name': 'PCR', 'datas': PCR_results}]
 
 # 运行组合回测
