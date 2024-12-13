@@ -2,6 +2,7 @@ import backtrader as bt
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
 from analyzing_tools import Analyzing_Tools
 
@@ -112,16 +113,139 @@ class EqualWeightsStrategy(bt.Strategy):
         df = pd.DataFrame(self.debug_info)
         df.set_index('Date', inplace=True)
         return df
-# 定义策略类
+
+#定义组合分析工具类
+class Tools:
+
+    def __init__(self):
+
+        self.Begin_Date='2019-01-04'
+
+    def Portfolio(self,strategies,initial_cash=10000000):
+        Begin_Date=self.Begin_Date
+        # 创建策略名称到资金分配比例的映射
+        allocation_map = {strat['name']: strat['allocation'] for strat in strategies}
+
+        # 初始化结果存储
+        strategy_returns = {}
+        strategy_values = {}
+        strategy_debug_info = {}
+        initial_cash = initial_cash  # 总初始资金
+
+        # 运行每个策略的回测
+        for strat in strategies:
+            cerebro = bt.Cerebro()
+            # 为该策略设置初始资金
+            strat_cash = initial_cash * strat['allocation']
+            cerebro.broker.setcash(strat_cash)
+            # 添加数据到 Cerebro
+            for code, dataframe in strat['datas'].items():
+                # 调试打印数据的前几行
+                print(f"Adding data for {code} in strategy {strat['name']}:")
+                print(dataframe.head())
+                # 检查必要的列是否存在
+                required_columns = ['open', 'high', 'low', 'close', 'volume', 'signal']
+                if not all(col in dataframe.columns for col in required_columns):
+                    print(f"Error: Data for {code} is missing required columns.")
+                    continue  # 跳过该数据
+
+                dataframe = dataframe.sort_index()
+                select_dataframe=dataframe.loc[Begin_Date:,:]
+                data_feed = Adding_Signal(dataname=select_dataframe, name=code)
+                cerebro.adddata(data_feed)
+            # 添加策略
+            cerebro.addstrategy(strat['strategy'])
+            # 运行回测
+            result = cerebro.run()
+            # 获取策略实例
+            strat_instance = result[0]
+            # 获取净值序列
+            net_value = strat_instance.get_net_value_series()
+
+            # 调试打印
+            print(f"Strategy: {strat['name']}, Net Value Series Length: {len(net_value)}")
+            print(net_value.head())
+
+            # 检查 net_value 是否为空
+            if net_value.empty:
+                print(f"Warning: Strategy {strat['name']} generated an empty net value series.")
+
+            # 存储净值序列
+            strategy_values[strat['name']] = net_value
+            # 收集调试信息
+            debug_df = strat_instance.get_debug_df()
+            strategy_debug_info[strat['name']] = debug_df
+
+        # 合并净值序列，处理不同数据长度问题
+        # 获取所有日期的并集
+        all_dates = pd.to_datetime(sorted(set.union(*(set(v.index) for v in strategy_values.values()))))
+
+        # 重新索引净值序列，并填充缺失值
+        for name, net_value in strategy_values.items():
+            # 去除重复的日期索引
+            net_value = net_value[~net_value.index.duplicated(keep='first')]
+            # 重新索引到所有日期
+            net_value = net_value.reindex(all_dates)
+            # 填充缺失值，前向填充
+            net_value = net_value.fillna(method='ffill')
+            # 填充初始缺失值为初始资金
+            initial_net_value = initial_cash * allocation_map[name]
+            net_value = net_value.fillna(initial_net_value)
+            strategy_values[name] = net_value
+
+        # 将净值序列合并为DataFrame
+        df_values = pd.DataFrame(strategy_values)
+        # 计算组合净值曲线
+        df_values['Combined'] = df_values.sum(axis=1)
+
+        # 收集所有子策略的调试信息
+        combined_debug_df = pd.concat(strategy_debug_info.values(), keys=strategy_debug_info.keys())
+        combined_debug_df = combined_debug_df.reset_index(level=0).rename(columns={'level_0': 'Strategy'})
+
+        return df_values,combined_debug_df
+
+    def Strategies_Corr_and_NV(self,pf_nv):
+        """
+        计算基金多个策略的相关性，并绘制热力图。
+
+        参数:
+            pf_nv (pd.DataFrame): 基金策略的净值数据，行是时间，列是策略名称。
+
+        返回:
+            corr_matrix (pd.DataFrame): 策略的相关性矩阵。
+        """
+        # 计算净值的每日收益率（百分比变化）
+        pf_nv_pct_change = pf_nv.pct_change().dropna()
+
+        # 计算相关性矩阵
+        corr_matrix = pf_nv_pct_change.corr()
+
+        # 设置绘图风格
+        sns.set(style="whitegrid", font_scale=1.2)
+
+        # 绘制热力图
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", cbar=True, square=True)
+        plt.title("Strategies Correlation Heatmap", fontsize=16)
+        plt.xticks(rotation=45)
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+        plt.show()
+
+        return corr_matrix
+
+
+# 定义策略类（设置数据路径和选择资产）
 class Strategies:
 
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'E:\数据库\另类数据\ETF期权数据',
+            'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
         self.target_assets = ["000016.SH","000300.SH","000852.SH",
@@ -437,110 +561,85 @@ class Strategies:
 
         return results,full_info
 
+    #期权类策略
+    def PCR(self,window_1=62):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+        target_assets=self.target_assets
+        paths=self.paths
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+
+            df=daily_data.copy()
+            option_code='510050'
+            data = pd.read_csv(os.path.join(paths['option'], f"{option_code}.csv"), index_col=[0])
+            data.index= pd.to_datetime(data.index)
+            
+            #和指数数据合并
+            merged_df = pd.merge(df, data[['p02872_f005', 'p02872_f006']], left_index=True, right_index=True, how='left')        
+            #计算PCR滚动五天的均值
+            merged_df['PCR']= merged_df['p02872_f006'].rolling(5).mean()/merged_df['p02872_f005'].rolling(5).mean()
+            # 定义一个函数来计算从小到大排列后排名第 70% 的值
+            def calc_70th_percentile(x):
+                return np.percentile(x, 70)
+
+            # 使用 rolling 方法计算过去六十日从小到大排列后第 70 个百分位数
+            merged_df['rolloing_70%'] = merged_df['PCR'].rolling(window_1).apply(calc_70th_percentile, raw=True)
+
+            df['PCR'] = merged_df['PCR']
+            df['rolloing_70%'] = merged_df['rolloing_70%']
+
+
+            # 信号触发条件
+            df.loc[(df["PCR"].shift(1) <= df["rolloing_70%"].shift(1)) & (df["PCR"] > df["rolloing_70%"]) , 'signal'] = 1
+            df.loc[(df["PCR"].shift(1) > df["rolloing_70%"].shift(1)) & (df["PCR"] <= df["rolloing_70%"]), 'signal'] = -1
+
+            # pos为空的，向上填充数字
+            df['signal'].fillna(method='ffill', inplace=True)
+
+            result=df
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
+
+
 # 实例化策略类
 strategies_instance = Strategies()
+tools=Tools()
 
 # 生成策略数据
-UDVD_results,_ = strategies_instance.UDVD()
+UDVD_results,_= strategies_instance.UDVD()
 Alligator_results,_ = strategies_instance.Alligator_strategy_with_Ao_and_Fractal_Macd()
 V_MACD_results,_ = strategies_instance.V_MACD()
+PCR_results,_=strategies_instance.PCR()
 
 # 定义添加信号的数据类
 Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.25, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.5, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'V_MACD', 'datas': V_MACD_results}
-]
-
-def Portfolio(strategies,initial_cash=10000000):
-    # 创建策略名称到资金分配比例的映射
-    allocation_map = {strat['name']: strat['allocation'] for strat in strategies}
-
-    # 初始化结果存储
-    strategy_returns = {}
-    strategy_values = {}
-    strategy_debug_info = {}
-    initial_cash = initial_cash  # 总初始资金
-
-    # 运行每个策略的回测
-    for strat in strategies:
-        cerebro = bt.Cerebro()
-        # 为该策略设置初始资金
-        strat_cash = initial_cash * strat['allocation']
-        cerebro.broker.setcash(strat_cash)
-        # 添加数据到 Cerebro
-        for code, dataframe in strat['datas'].items():
-            # 调试打印数据的前几行
-            print(f"Adding data for {code} in strategy {strat['name']}:")
-            print(dataframe.head())
-            # 检查必要的列是否存在
-            required_columns = ['open', 'high', 'low', 'close', 'volume', 'signal']
-            if not all(col in dataframe.columns for col in required_columns):
-                print(f"Error: Data for {code} is missing required columns.")
-                continue  # 跳过该数据
-
-            dataframe = dataframe.sort_index()
-            data_feed = Adding_Signal(dataname=dataframe, name=code)
-            cerebro.adddata(data_feed)
-        # 添加策略
-        cerebro.addstrategy(strat['strategy'])
-        # 运行回测
-        result = cerebro.run()
-        # 获取策略实例
-        strat_instance = result[0]
-        # 获取净值序列
-        net_value = strat_instance.get_net_value_series()
-
-        # 调试打印
-        print(f"Strategy: {strat['name']}, Net Value Series Length: {len(net_value)}")
-        print(net_value.head())
-
-        # 检查 net_value 是否为空
-        if net_value.empty:
-            print(f"Warning: Strategy {strat['name']} generated an empty net value series.")
-
-        # 存储净值序列
-        strategy_values[strat['name']] = net_value
-        # 收集调试信息
-        debug_df = strat_instance.get_debug_df()
-        strategy_debug_info[strat['name']] = debug_df
-
-    # 合并净值序列，处理不同数据长度问题
-    # 获取所有日期的并集
-    all_dates = pd.to_datetime(sorted(set.union(*(set(v.index) for v in strategy_values.values()))))
-
-    # 重新索引净值序列，并填充缺失值
-    for name, net_value in strategy_values.items():
-        # 去除重复的日期索引
-        net_value = net_value[~net_value.index.duplicated(keep='first')]
-        # 重新索引到所有日期
-        net_value = net_value.reindex(all_dates)
-        # 填充缺失值，前向填充
-        net_value = net_value.fillna(method='ffill')
-        # 填充初始缺失值为初始资金
-        initial_net_value = initial_cash * allocation_map[name]
-        net_value = net_value.fillna(initial_net_value)
-        strategy_values[name] = net_value
-
-    # 将净值序列合并为DataFrame
-    df_values = pd.DataFrame(strategy_values)
-    # 计算组合净值曲线
-    df_values['Combined'] = df_values.sum(axis=1)
-
-    # 收集所有子策略的调试信息
-    combined_debug_df = pd.concat(strategy_debug_info.values(), keys=strategy_debug_info.keys())
-    combined_debug_df = combined_debug_df.reset_index(level=0).rename(columns={'level_0': 'Strategy'})
-
-    return df_values,combined_debug_df
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.166, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.166, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.166, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.50, 'name': 'PCR', 'datas': PCR_results}]
 
 # 运行组合回测
-pf_nv, debug_df = Portfolio(strategies_list)
+pf_nv, debug_df = tools.Portfolio(strategies_list)
 
 # 获取组合净值
-Portfolio_nv = pf_nv[['Combined']].resample('D').last().dropna()
+Portfolio_nv = pf_nv[['Combined']]
 
 
 #组合分析
@@ -552,4 +651,6 @@ index_price_path=strategies_instance.paths['daily']
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfolio_nv, freq='D')
 
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
+
+tools.Strategies_Corr_and_NV(pf_nv)
 

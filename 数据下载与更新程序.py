@@ -1706,5 +1706,8 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-Update_All('2024-12-13')
+code_list=['510050']
 
+path=r'E:\数据库\另类数据\ETF期权数据'
+
+DUD.Downloading_ETF_Option_Data(code_list,'2018-01-04',"2024-12-13",path)
