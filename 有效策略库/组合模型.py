@@ -118,10 +118,10 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
         self.target_assets = ["000016.SH","000300.SH","000852.SH",
@@ -553,4 +553,3 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-debug_df
