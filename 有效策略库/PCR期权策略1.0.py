@@ -6,7 +6,6 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
 import numpy as np
 
 def PCR(target_assets,paths,window_1=62):
@@ -22,17 +21,12 @@ def PCR(target_assets,paths,window_1=62):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
-
-        data = pd.read_csv(r'D:\1.工作文件\0.数据库\sz50ETF期权数据.csv')
-        data['p02872_f001'] = pd.to_datetime(data['p02872_f001'])
+        option_code='510050'
+        data = pd.read_csv(os.path.join(paths['option'], f"{option_code}.csv"), index_col=[0])
+        data.index= pd.to_datetime(data.index)
         
-        #按照时间升序排列
-        data= data.sort_values(by='p02872_f001')
-        data.set_index('p02872_f001', inplace=True)
         #和指数数据合并
         merged_df = pd.merge(df, data[['p02872_f005', 'p02872_f006']], left_index=True, right_index=True, how='left')        
-        # 向下填充'value'列的NaN值
-        #merged_df['p02872_f007'].fillna(method='ffill', inplace=True)
         #计算PCR滚动五天的均值
         merged_df['PCR']= merged_df['p02872_f006'].rolling(5).mean()/merged_df['p02872_f005'].rolling(5).mean()
         # 定义一个函数来计算从小到大排列后排名第 70% 的值
@@ -42,13 +36,13 @@ def PCR(target_assets,paths,window_1=62):
         # 使用 rolling 方法计算过去六十日从小到大排列后第 70 个百分位数
         merged_df['rolloing_70%'] = merged_df['PCR'].rolling(window_1).apply(calc_70th_percentile, raw=True)
 
-        df['var_1'] = merged_df['PCR']
-        df['var_2'] = merged_df['rolloing_70%']
+        df['PCR'] = merged_df['PCR']
+        df['rolloing_70%'] = merged_df['rolloing_70%']
 
 
         # 信号触发条件
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]), 'signal'] = -1
+        df.loc[(df["PCR"].shift(1) <= df["rolloing_70%"].shift(1)) & (df["PCR"] > df["rolloing_70%"]) , 'signal'] = 1
+        df.loc[(df["PCR"].shift(1) > df["rolloing_70%"].shift(1)) & (df["PCR"] <= df["rolloing_70%"]), 'signal'] = -1
 
         # pos为空的，向上填充数字
         df['signal'].fillna(method='ffill', inplace=True)
@@ -198,10 +192,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'option': r'E:\数据库\另类数据\ETF期权数据',
+    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
