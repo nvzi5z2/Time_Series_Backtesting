@@ -1093,8 +1093,7 @@ class Downloading_And_Updating_Data():
         for i in range(0, len(Code_List)):
 
             try:
-
-                Data=THS_DS(Code_List[i],'ths_np_atsopc_ttm_stock;ths_total_assets_stock;ths_oa_cash_net_flow_ttm_stock;ths_op_ttm_stock;ths_lt_liability_ratio_stock;ths_current_ratio_stock;ths_gross_selling_rate_stock;ths_total_capital_turnover_stock','100;;100;100;;;;','Interval:Q',Begin_Date,End_Date).data
+                Data=THS_DS(Code_List[i],'ths_np_atoopc_pit_stock;ths_total_assets_pit_stock;ths_ncf_from_oa_pit_stock;ths_total_liab_pit_stock;ths_total_current_assets_pit_stock;ths_total_current_liab_pit_stock;ths_total_shares_stock;ths_operating_total_revenue_stock;ths_gross_selling_rate_stock','0@103,1;0@103,1;0@103,1;0@103,1;0@103,1;0@103,1;;100;','',Begin_Date,End_Date).data   
 
                 Data.index = Data.loc[:, "time"]
 
@@ -1110,6 +1109,54 @@ class Downloading_And_Updating_Data():
 
         print("下载结束")
 
+    def Update_F_Score_Data(self,End_Date,Data_Path):
+
+        os.chdir(Data_Path)
+
+        List=os.listdir()
+
+        Doc_Number=len(List)
+
+        print("更新开始")
+
+        for i in range(0,Doc_Number):
+
+            try:
+
+                df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                df.index=pd.to_datetime(df.index)
+
+                if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                    New_Begin_Date=df.index[-1]+Day()
+
+                    New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                    code = List[i].replace('.csv', "")
+                            
+                    new_data=THS_DS(code,'ths_np_atoopc_pit_stock;ths_total_assets_pit_stock;ths_ncf_from_oa_pit_stock;ths_total_liab_pit_stock;ths_total_current_assets_pit_stock;ths_total_current_liab_pit_stock;ths_total_shares_stock;ths_operating_total_revenue_stock;ths_gross_selling_rate_stock','0@103,1;0@103,1;0@103,1;0@103,1;0@103,1;0@103,1;;100;','',New_Begin_Date,End_Date).data  
+                    
+                    new_data.index=pd.to_datetime(new_data.loc[:,"time"])
+
+                    new_data=new_data.iloc[:,1:]
+
+                    Updated_Data=pd.concat([df,new_data],axis=0)
+
+                    Updated_Data.to_csv(List[i])
+
+                    print(str(i/Doc_Number))
+
+                else:
+
+                    print("数据更新至最新")
+
+            except:
+
+                print(List[i]+"出现错误")
+
+        print("个股财务数据更新结束")
+        
     def Downloading_Cov_Bond_Vol_Price_Data(self,Code_List,Begin_Date,End_Date,Export_Path):
 
         Export_Path=Export_Path
@@ -1636,7 +1683,124 @@ class Downloading_And_Updating_Data():
 
         return
 
+    def Download_Index_DDE_Data(Code_List,Begin_Date,End_Date,Export_Path):
 
+        def Downloading_Index_DDE_Data(Code,Begin_Date,End_Date):
+
+            #日期循环
+                Begin_Date=Begin_Date
+
+                Begin_Date=pd.to_datetime(Begin_Date)
+
+                End_Date=End_Date
+
+                End_Date=pd.to_datetime(End_Date)
+
+                Gap=(End_Date-Begin_Date)/250
+
+                Period=Gap.days
+
+                Timeseries=pd.date_range(Begin_Date,End_Date,periods=Period)
+
+                Timeseries_List=Timeseries.strftime("%Y-%m-%d").tolist()
+
+                Begin_Date_List=Timeseries_List[:-1]
+
+                End_Date_List=Timeseries_List[1:]
+
+                Data=[]
+
+            #日期循环下载数据
+
+                for i,j in zip(Begin_Date_List,End_Date_List):
+                    
+                    DF=THS_DS(Code,'ths_dde_5d_hb_index;ths_dde_10d_hb_index;ths_dde_20d_hb_index',';;','block:history',i,j).data
+                    Data.append(DF)
+                
+                Data=pd.concat(Data,axis=0)
+
+                return Data
+
+        os.chdir(Export_Path)
+
+        Error_Code=[]
+
+        print("更新开始")
+        
+        for i in Code_List:
+
+            try:
+                
+                Data=Downloading_Index_DDE_Data(i,Begin_Date,End_Date)
+
+                Data=Data.set_index('time',drop=True)
+
+                Data.to_csv(i+".csv")
+
+                print(i+"输出完成")
+
+            except:
+
+                print(i+"出现错误")
+
+                Error_Code.append(i)
+        
+        return
+
+    def Updating_Index_DDE_Data(End_Date,Data_Path):
+
+        Data_Path=Data_Path
+
+        os.chdir(Data_Path)
+
+        List=os.listdir()
+
+        Doc_Number=len(List)
+
+        print("更新开始")
+
+        for i in range(0,Doc_Number):
+
+            try:
+
+                df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                df.index=pd.to_datetime(df.index)
+
+                if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                    New_Begin_Date=df.index[-1]+Day()
+
+                    New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                    code = List[i].replace('.csv', "")
+                    THS_DS('801017.SL','ths_dde_5d_hb_index;ths_dde_10d_hb_index;ths_dde_20d_hb_index',';;','block:history',New_Begin_Date,End_Date).data
+                    new_data=THS_DS(code,'ths_dde_5d_hb_index;ths_dde_10d_hb_index;ths_dde_20d_hb_index',';;','block:history',New_Begin_Date,End_Date).data
+
+                    new_data.index=pd.to_datetime(new_data.loc[:,"time"])
+
+                    new_data=new_data.iloc[:,2:]
+
+                    Updated_Data=pd.concat([df,new_data],axis=0)
+                    
+                    Updated_Data.loc[:,"thscode"]=Updated_Data.iloc[0,0]
+
+                    Updated_Data.to_csv(List[i])
+
+                    print(str(i/Doc_Number))
+
+                else:
+
+                    print("数据更新至最新")
+
+            except:
+
+                print(List[i]+"出现错误")
+
+        print("更新结束")
+
+        return
+    
 
 
 DUD=Downloading_And_Updating_Data()
@@ -1706,8 +1870,9 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-code_list=['510050']
+code_list=['M004488064']
 
-path=r'E:\数据库\另类数据\ETF期权数据'
+path=r'E:\数据库\同花顺EDB数据'
 
-DUD.Downloading_ETF_Option_Data(code_list,'2018-01-04',"2024-12-13",path)
+DUD.Download_EDB_Data(code_list,'2013-03-31','2024-12-13',path)
+

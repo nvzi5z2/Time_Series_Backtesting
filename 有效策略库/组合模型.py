@@ -23,7 +23,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 
 class EqualWeightsStrategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.198),  # 每个资产的仓位百分比
     )
     
     def __init__(self):
@@ -248,7 +248,7 @@ class Strategies:
             'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
-        self.target_assets = ["000016.SH","000300.SH","000852.SH",
+        self.target_assets = ["000300.SH","000852.SH",
                               "000905.SH", "399006.SZ","399303.SZ"]
 
     # 突破类策略
