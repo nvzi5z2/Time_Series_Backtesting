@@ -142,7 +142,22 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
 
         BCI=Inventory_merged_df[['BCI_Inventory_Index']]
 
-        BCI.loc[:,"BCI_pct_change"]=BCI.pct_change()
+        #进行HP滤波
+        cycle_1, trend_1 = hpfilter(BCI, lamb=14400)
+
+        # 将结果存储到 DataFrame 中
+        BCI['Trend_1'] = trend_1
+        BCI['Cycle_1'] = cycle_1
+
+        # 对第一次滤波的周期成分进行二次 HP 滤波
+        cycle_2, trend_2 = hpfilter(BCI['Cycle_1'], lamb=14400)
+
+        # 将结果存储到 DataFrame 中
+        BCI['Trend_2'] = trend_2
+        BCI['Cycle_2'] = cycle_2
+
+
+        BCI.loc[:,"BCI_pct_change"]=BCI.loc[:,"Trend_2"].pct_change()
         # 生成信号列：环比变化为正时信号为1，为负时信号为-1
         
         BCI.loc[:, "BCI_Signal"] = BCI["BCI_pct_change"].apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)
@@ -170,7 +185,7 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
         #将有信号的日期df调出来
         first_signal_date=Merged_Signal_DF.index[0]
         first_signal_formatted_date=first_signal_date.strftime('%Y-%m-%d')
-        total_info_selected=total_info.loc["2016-03-31":,:]
+        total_info_selected=total_info.loc[first_signal_formatted_date:,:]
 
         #填充缺失值
         total_info_selected=total_info_selected.ffill()
@@ -197,7 +212,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class Inventory_Cycle_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.198),  # 每个资产的仓位百分比
+        ('size_pct',0.99),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -334,6 +349,8 @@ target_assets = [
     "399006.SZ",
     "399303.SZ"
 ]
+
+
 
 
 

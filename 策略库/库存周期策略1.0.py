@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def Inventory_Cycle(target_assets,paths,window_1=8):
+def Inventory_Cycle(target_assets,paths,window_1=10):
     #PMI：原材料库存代码=M002043811
     #BCI:企业库存前瞻指数=M004488064 
 
@@ -29,16 +29,7 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
         PMI_Inventory=PMI_Inventory.set_index('time',drop=True)
         PMI_Inventory_value=PMI_Inventory[['value']]
         PMI_Inventory_value.columns=['PMI_Inventory_Index']
-        BCI_Inventory=pd.read_csv(paths['EDB']+'\\'+'M004488064.csv')
-        BCI_Inventory=BCI_Inventory.set_index('time',drop=True)
-        BCI_Inventory_value=BCI_Inventory[['value']]
-        BCI_Inventory_value.columns=['BCI_Inventory_Index']
-
-        #合并所需的EDB数据
-        Inventory_merged_df=pd.merge(PMI_Inventory_value,BCI_Inventory_value,right_index=True,left_index=True)
-        Inventory_merged_df.index=pd.to_datetime(Inventory_merged_df.index)
-        Inventory_merged_df=Inventory_merged_df.sort_index()
-
+        PMI_Inventory_value=PMI_Inventory_value.sort_index()
         #计算第一个信号（PMI原材料库存信号）
 
         #处理极值和zscore化
@@ -77,13 +68,14 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
 
             return data[[column_name+'_Zscore']]
         
-        PMI_Inventory_Index_Zscore=process_macro_data(Inventory_merged_df,'PMI_Inventory_Index')
-        
+        PMI_Inventory_Index_Zscore=process_macro_data(PMI_Inventory_value,'PMI_Inventory_Index')
+        PMI_Inventory_Index_Zscore=PMI_Inventory_Index_Zscore.loc["2012-06-01":,:]
         #输出PMI的信号
         multiplier=window_1/10
+       
         def generate_signals_with_cleaning(data, column_name, window=36, multiplier=0.8):
             """
-            根据Zscore生成信号，并将第一个信号前的数据删除
+            根据Zscore生成信号，并删除前36个月的数据以避免回测时出错
 
             参数：
             data : pd.DataFrame
@@ -97,7 +89,7 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
 
             返回：
             pd.DataFrame
-                包含信号的DataFrame，删除了第一个信号前的数据
+                包含信号的DataFrame，删除了前36个月的数据
             """
             if column_name not in data.columns:
                 raise ValueError(f"列名 {column_name} 不存在于输入数据中")
@@ -110,31 +102,28 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
             lower_bound = -multiplier * rolling_std
 
             # 初始化信号
-            signals = [np.nan]  # 第一个信号初始化为NaN
+            signals = []
 
             # 生成信号
-            for i in range(1, len(data)):
-                if data[column_name].iloc[i] > upper_bound.iloc[i]:
-                    signals.append(-1)  # 看空信号
-                elif data[column_name].iloc[i] < lower_bound.iloc[i]:
-                    signals.append(1)  # 看多信号
+            for i in range(len(data)):
+                if i < window:  # 在滚动窗口大小之前，无数据可用
+                    signals.append(np.nan)
                 else:
-                    signals.append(signals[-1])  # 维持上一个信号
+                    if data[column_name].iloc[i] > upper_bound.iloc[i]:
+                        signals.append(-1)  # 看空信号
+                    elif data[column_name].iloc[i] < lower_bound.iloc[i]:
+                        signals.append(1)  # 看多信号
+                    else:
+                        signals.append(signals[-1])  # 维持上一个信号
 
             # 将信号加入数据框
             data['Signal'] = signals
 
-            # 找到第一个有效信号的索引
-            first_signal_index = data['Signal'].first_valid_index()
-
-            # 将第一个信号前的数据标记为NaN
-            data.loc[:first_signal_index, 'Signal'] = np.nan
-
-            # 删除NaN值
-            data = data.dropna(subset=['Signal'])
+            # 删除前36个月的数据（滚动窗口前的数据）
+            data = data.iloc[window:].copy()
 
             return data[['Signal']]
-        
+                
         PMI_Signals = generate_signals_with_cleaning(PMI_Inventory_Index_Zscore, 'PMI_Inventory_Index_Zscore',multiplier=multiplier)
 
         PMI_Signals.columns=['signal']
@@ -146,21 +135,18 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
         PMI_Signals_daily.index=pd.to_datetime(PMI_Signals_daily.index)
         
         #存储结果
-        daily_data.loc[:,"signal"]=PMI_Signals_daily
+        total_info=pd.concat([daily_data,PMI_Signals_daily],axis=1)
+        first_signal_date=PMI_Signals_daily.index[0]
+        first_signal_formatted_date=first_signal_date.strftime('%Y-%m-%d')
+        total_info_selected=total_info.loc[first_signal_formatted_date:,:]
 
-        #填充最后一个月的NaN值
+        #填充缺失值
+        total_info_selected=total_info_selected.ffill()
 
-        current_date = daily_data.index[-1]  # 例如：Timestamp('2024-12-13 00:00:00')
+        signal=total_info_selected[['signal']]
 
-        # 计算最后两个月的起始日期
-        two_months_ago = current_date - pd.DateOffset(months=2)
+        daily_data.loc[:,"signal"]=signal
 
-        # 筛选最后两个月的数据范围
-        mask_last_two_months = (daily_data.index >= two_months_ago) & (daily_data.index <= current_date)
-
-        # 对最后两个月的数据填充 NaN 值
-        daily_data.loc[mask_last_two_months, 'signal'] = daily_data.loc[mask_last_two_months, 'signal'].fillna(method='ffill')
-                
         results[code] = daily_data.dropna()
 
         full_info[code]=daily_data    
@@ -177,7 +163,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class Inventory_Cycle_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.198),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -308,13 +294,13 @@ paths = {
 
 # 资产列表
 target_assets = [
+    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",
     "399006.SZ",
     "399303.SZ"
 ]
-
 
 
 # 生成信号
@@ -343,7 +329,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=500,freq='D')
 
 
 #定义参数优化函数

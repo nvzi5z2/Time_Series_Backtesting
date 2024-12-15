@@ -21,9 +21,10 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
         ('signal', 'signal'),
     )
 
+
 class EqualWeightsStrategy(bt.Strategy):
     params = (
-        ('size_pct',0.198),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
     
     def __init__(self):
@@ -121,7 +122,7 @@ class Tools:
 
         self.Begin_Date='2019-01-04'
 
-    def Portfolio(self,strategies,initial_cash=10000000):
+    def Portfolio(self,strategies,initial_cash=100000000):
         Begin_Date=self.Begin_Date
         # 创建策略名称到资金分配比例的映射
         allocation_map = {strat['name']: strat['allocation'] for strat in strategies}
@@ -245,6 +246,7 @@ class Strategies:
             'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
             'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
             'option': r'E:\数据库\另类数据\ETF期权数据',
+            'EDB':r'E:\数据库\同花顺EDB数据',
             'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
@@ -614,6 +616,155 @@ class Strategies:
 
         return results,full_info
 
+    #宏观类策略
+
+    def Inventory_Cycle(self,window_1=10):
+        #PMI：原材料库存代码=M002043811
+        #BCI:企业库存前瞻指数=M004488064 
+
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+
+        target_assets=self.target_assets
+        paths=self.paths
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据量价数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+            df=daily_data.copy()
+
+            #读取EDB数据
+            PMI_Inventory= pd.read_csv(paths['EDB']+'\\'+'M002043811.csv')
+            PMI_Inventory=PMI_Inventory.set_index('time',drop=True)
+            PMI_Inventory_value=PMI_Inventory[['value']]
+            PMI_Inventory_value.columns=['PMI_Inventory_Index']
+            PMI_Inventory_value=PMI_Inventory_value.sort_index()
+            #计算第一个信号（PMI原材料库存信号）
+
+            #处理极值和zscore化
+            def process_macro_data(data, column_name):
+                """
+                对输入的宏观数据进行极端值处理和Zscore标准化处理
+
+                参数：
+                data : pd.DataFrame
+                    包含待处理数据的DataFrame
+                column_name : str
+                    需要处理的列名
+
+                返回：
+                pd.DataFrame
+                    包含处理后数据的DataFrame，新增列为 {column_name}_Zscore
+                """
+                # 确保列存在
+                if column_name not in data.columns:
+                    raise ValueError(f"列名 {column_name} 不存在于输入数据中")
+                
+                # 计算均值和标准差
+                mean = data[column_name].mean()
+                std = data[column_name].std()
+
+                # 定义上下限
+                upper_limit = mean + 3 * std
+                lower_limit = mean - 3 * std
+
+                # 极端值处理
+                data[column_name] = data[column_name].clip(lower=lower_limit, upper=upper_limit)
+
+                # Zscore标准化处理
+                zscore_column_name = f"{column_name}_Zscore"
+                data[zscore_column_name] = (data[column_name] - mean) / std
+
+                return data[[column_name+'_Zscore']]
+            
+            PMI_Inventory_Index_Zscore=process_macro_data(PMI_Inventory_value,'PMI_Inventory_Index')
+            PMI_Inventory_Index_Zscore=PMI_Inventory_Index_Zscore.loc["2012-06-01":,:]
+            #输出PMI的信号
+            multiplier=window_1/10
+        
+            def generate_signals_with_cleaning(data, column_name, window=36, multiplier=0.8):
+                """
+                根据Zscore生成信号，并删除前36个月的数据以避免回测时出错
+
+                参数：
+                data : pd.DataFrame
+                    包含处理后数据的DataFrame
+                column_name : str
+                    需要处理的列名（Zscore列）
+                window : int, 可选
+                    滚动窗口大小，默认为36个月
+                multiplier : float, 可选
+                    标准差的倍数，默认为0.8
+
+                返回：
+                pd.DataFrame
+                    包含信号的DataFrame，删除了前36个月的数据
+                """
+                if column_name not in data.columns:
+                    raise ValueError(f"列名 {column_name} 不存在于输入数据中")
+
+                # 计算滚动标准差
+                rolling_std = data[column_name].rolling(window=window).std()
+
+                # 计算正负0.8倍标准差
+                upper_bound = multiplier * rolling_std
+                lower_bound = -multiplier * rolling_std
+
+                # 初始化信号
+                signals = []
+
+                # 生成信号
+                for i in range(len(data)):
+                    if i < window:  # 在滚动窗口大小之前，无数据可用
+                        signals.append(np.nan)
+                    else:
+                        if data[column_name].iloc[i] > upper_bound.iloc[i]:
+                            signals.append(-1)  # 看空信号
+                        elif data[column_name].iloc[i] < lower_bound.iloc[i]:
+                            signals.append(1)  # 看多信号
+                        else:
+                            signals.append(signals[-1])  # 维持上一个信号
+
+                # 将信号加入数据框
+                data['Signal'] = signals
+
+                # 删除前36个月的数据（滚动窗口前的数据）
+                data = data.iloc[window:].copy()
+
+                return data[['Signal']]
+                    
+            PMI_Signals = generate_signals_with_cleaning(PMI_Inventory_Index_Zscore, 'PMI_Inventory_Index_Zscore',multiplier=multiplier)
+
+            PMI_Signals.columns=['signal']
+
+            PMI_Signals.index=pd.to_datetime(PMI_Signals.index)
+
+            # 使用 resample 将月频转换为日频
+            PMI_Signals_daily = PMI_Signals.resample('D').ffill()
+            PMI_Signals_daily.index=pd.to_datetime(PMI_Signals_daily.index)
+            
+            #存储结果
+            total_info=pd.concat([daily_data,PMI_Signals_daily],axis=1)
+            first_signal_date=PMI_Signals_daily.index[0]
+            first_signal_formatted_date=first_signal_date.strftime('%Y-%m-%d')
+            total_info_selected=total_info.loc[first_signal_formatted_date:,:]
+
+            #填充缺失值
+            total_info_selected=total_info_selected.ffill()
+
+            signal=total_info_selected[['signal']]
+
+            daily_data.loc[:,"signal"]=signal
+
+            results[code] = daily_data.dropna()
+
+            full_info[code]=daily_data    
+        
+        return results,full_info
+
 
 # 实例化策略类
 strategies_instance = Strategies()
@@ -624,16 +775,19 @@ UDVD_results,_= strategies_instance.UDVD()
 Alligator_results,_ = strategies_instance.Alligator_strategy_with_Ao_and_Fractal_Macd()
 V_MACD_results,_ = strategies_instance.V_MACD()
 PCR_results,_=strategies_instance.PCR()
+Inventory_Cycle_results,_=strategies_instance.Inventory_Cycle()
 
 # 定义添加信号的数据类
 Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.125, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.25, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.125, 'name': 'V_MACD', 'datas': V_MACD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.50, 'name': 'PCR', 'datas': PCR_results}]
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.11, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.11, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.11, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.33, 'name': 'PCR', 'datas': PCR_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.33, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results}
+    ]
 
 # 运行组合回测
 pf_nv, debug_df = tools.Portfolio(strategies_list)
