@@ -1683,7 +1683,7 @@ class Downloading_And_Updating_Data():
 
         return
 
-    def Download_Index_DDE_Data(Code_List,Begin_Date,End_Date,Export_Path):
+    def Download_Index_DDE_Data(self,Code_List,Begin_Date,End_Date,Export_Path):
 
         def Downloading_Index_DDE_Data(Code,Begin_Date,End_Date):
 
@@ -1747,7 +1747,7 @@ class Downloading_And_Updating_Data():
         
         return
 
-    def Updating_Index_DDE_Data(End_Date,Data_Path):
+    def Updating_Index_DDE_Data(self,End_Date,Data_Path):
 
         Data_Path=Data_Path
 
@@ -1801,6 +1801,110 @@ class Downloading_And_Updating_Data():
 
         return
     
+        
+        def Updating_updown_Data(End_Date, Data_Path):
+
+            Data_Path=Data_Path
+
+            os.chdir(Data_Path)
+
+            List=os.listdir()
+
+            Doc_Number=len(List)
+
+            print("更新开始")
+
+            for i in range(0,Doc_Number):
+
+                try:
+
+                    df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                    df.index=pd.to_datetime(df.index)
+
+                    if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                        New_Begin_Date=df.index[-1]+Day()
+
+                        New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                        code = List[i].replace('.csv', "")
+
+                        new_data=THS_DS(code,'ths_limit_up_stock_num_sector;ths_limit_down_stock_num_sector',';', 'block:latest', New_Begin_Date, End_Date).data
+
+                        new_data.index=pd.to_datetime(new_data.loc[:,"time"])
+
+                        new_data=new_data.iloc[:,2:]
+
+                        Updated_Data=pd.concat([df,new_data],axis=0)
+
+                        Updated_Data.to_csv(List[i])
+
+                        print(str(i/Doc_Number))
+
+                    else:
+
+                        print("数据更新至最新")
+
+                except:
+
+                    print(List[i]+"出现错误")
+
+            print("更新结束")
+
+            return
+
+    def Updating_updown_Data(self,End_Date, Data_Path):
+
+        Data_Path=Data_Path
+
+        os.chdir(Data_Path)
+
+        List=os.listdir()
+
+        Doc_Number=len(List)
+
+        print("更新开始")
+
+        for i in range(0,Doc_Number):
+
+            try:
+
+                df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                df.index=pd.to_datetime(df.index)
+
+                if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                    New_Begin_Date=df.index[-1]+Day()
+
+                    New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                    code = List[i].replace('.csv', "")
+
+                    new_data=THS_DS(code,'ths_limit_up_stock_num_sector;ths_limit_down_stock_num_sector',';', 'block:latest', New_Begin_Date, End_Date).data
+
+                    new_data.index=pd.to_datetime(new_data.loc[:,"time"])
+
+                    new_data=new_data.iloc[:,2:]
+
+                    Updated_Data=pd.concat([df,new_data],axis=0)
+
+                    Updated_Data.to_csv(List[i])
+
+                    print(str(i/Doc_Number))
+
+                else:
+
+                    print("数据更新至最新")
+
+            except:
+
+                print(List[i]+"出现错误")
+
+        print("更新结束")
+
+        return
 
 
 DUD=Downloading_And_Updating_Data()
