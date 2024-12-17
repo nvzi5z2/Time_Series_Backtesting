@@ -1913,57 +1913,57 @@ DUD=Downloading_And_Updating_Data()
 
 def Update_All(End_Date):
 
-    Price_Data_Path_1=r"E:\数据库\同花顺指数量价数据"
+    Price_Data_Path_1=r"D:\数据库\同花顺指数量价数据"
 
-    Price_Data_Path_2=r"E:\数据库\同花顺ETF跟踪指数量价数据\1d"
+    Price_Data_Path_2=r"D:\数据库\同花顺ETF跟踪指数量价数据\1d"
 
-    Price_Data_Path_3=r'E:\数据库\同花顺ETF量价数据'
+    Price_Data_Path_3=r'D:\数据库\同花顺ETF量价数据'
 
-    Price_Data_Path_4=r'E:\数据库\同花顺商品指数量价数据'
+    Price_Data_Path_4=r'D:\数据库\同花顺商品指数量价数据'
 
     Path_List=[Price_Data_Path_1,Price_Data_Path_2,Price_Data_Path_3,Price_Data_Path_4]
 
     DUD.Updating_All_Market_Vol_Data(End_Date,Path_List)
 
-    Forcast_Path=r"E:\数据库\同花顺ETF跟踪指数一致预期数据\预测净利润两年复合增长"
+    Forcast_Path=r"D:\数据库\同花顺ETF跟踪指数一致预期数据\预测净利润两年复合增长"
 
     DUD.Updating_Forcast_2yr_Data(End_Date,Forcast_Path)
 
-    Free_Turn_Path=r"E:\数据库\同花顺指数自由流通换手率"
+    Free_Turn_Path=r"D:\数据库\同花顺指数自由流通换手率"
 
     DUD.Updating_Index_Free_Turn_Data(End_Date,Free_Turn_Path)
 
-    Valuation_Path=r"E:\数据库\同花顺ETF跟踪指数估值数据"
+    Valuation_Path=r"D:\数据库\同花顺ETF跟踪指数估值数据"
 
     DUD.Updating_Index_Valuation_Data(End_Date,Valuation_Path)
 
-    EDB_Data_Path=r"E:\数据库\同花顺EDB数据"
+    EDB_Data_Path=r"D:\数据库\同花顺EDB数据"
 
     DUD.Update_EDB_Data(EDB_Data_Path,End_Date)
 
-    ETF_Option_Path=r"E:\数据库\另类数据\ETF期权数据"
+    ETF_Option_Path=r"D:\数据库\另类数据\ETF期权数据"
 
     DUD.Updating_ETF_Option(End_Date,ETF_Option_Path)
 
-    A50_Path=r'E:\数据库\另类数据\A50期货数据'
+    A50_Path=r'D:\数据库\另类数据\A50期货数据'
 
     DUD.Updating_A50_Futures_Data(End_Date,A50_Path)
 
-    Forcast_Data_Path=r'E:\数据库\同花顺ETF跟踪指数一致预期数据\盈利预测综合值'
+    Forcast_Data_Path=r'D:\数据库\同花顺ETF跟踪指数一致预期数据\盈利预测综合值'
 
     DUD.Update_Index_Forcast_Data(End_Date,Forcast_Data_Path)
 
-    Cov_Bond_Path=r'E:\数据库\同花顺可转债数据'
+    Cov_Bond_Path=r'D:\数据库\同花顺可转债数据'
 
     DUD.Update_Cov_Bond_Vol_Price_Data(End_Date,Cov_Bond_Path)
 
-    H_L_Path=r'E:\数据库\另类数据\新高新低'
+    H_L_Path=r'D:\数据库\另类数据\新高新低'
 
     DUD.Updating_newHL_Data(End_Date,H_L_Path)
 
-    Export_Path_60 = r'E:\数据库\同花顺ETF跟踪指数量价数据\1h' 
+    Export_Path_60 = r'D:\数据库\同花顺ETF跟踪指数量价数据\1h' 
 
-    Export_Path_15=r'E:\数据库\同花顺ETF跟踪指数量价数据\15min'
+    Export_Path_15=r'D:\数据库\同花顺ETF跟踪指数量价数据\15min'
 
     HF_End_Date=End_Date+' 15:00'
 
@@ -1974,9 +1974,11 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-code_list=['M004488064']
+Update_All('2024-12-16')
 
-path=r'E:\数据库\同花顺EDB数据'
+# code_list=['M004488064']
 
-DUD.Download_EDB_Data(code_list,'2013-03-31','2024-12-13',path)
+# path=r'D:\数据库\同花顺EDB数据'
+
+# DUD.Download_EDB_Data(code_list,'2013-03-31','2024-12-13',path)
 

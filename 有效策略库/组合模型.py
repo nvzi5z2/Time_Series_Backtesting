@@ -120,7 +120,7 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2019-01-04'
+        self.Begin_Date='2024-01-04'
 
     def Portfolio(self,strategies,initial_cash=100000000):
         Begin_Date=self.Begin_Date
@@ -242,12 +242,12 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'E:\数据库\另类数据\ETF期权数据',
-            'EDB':r'E:\数据库\同花顺EDB数据',
-            'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\数据库\同花顺EDB数据',
+            'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
         self.target_assets = ["000300.SH","000852.SH",
