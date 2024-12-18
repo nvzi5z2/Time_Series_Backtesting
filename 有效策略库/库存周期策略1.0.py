@@ -8,7 +8,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def high_low(target_assets,paths,window_1=12):
+def Inventory_Cycle(target_assets,paths,window_1=10):
+    #PMI：原材料库存代码=M002043811
+    #BCI:企业库存前瞻指数=M004488064 
+
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -16,55 +19,138 @@ def high_low(target_assets,paths,window_1=12):
     
     #编写策略主体部分
     for code in target_assets:
-        # 读取数据
+        # 读取数据量价数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
-
         df=daily_data.copy()
 
-        #将上涨、平、下跌数量和涨跌停数量合并
-        high_low_path=paths['new_HL']
-        high_low=pd.read_csv(high_low_path)
-        up_company_path=paths['up_companies']
-        data = pd.read_csv(up_company_path)
-        data=data.rename(columns={'p00112_f001':'time'})
-        high_low['time'] = pd.to_datetime(high_low['time'])
-        data['time'] = pd.to_datetime(data['time'])
-        num_df = pd.merge(high_low, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
-        num_df.set_index('time', inplace=True)
+        #读取EDB数据
+        PMI_Inventory= pd.read_csv(paths['EDB']+'\\'+'M002043811.csv')
+        PMI_Inventory=PMI_Inventory.set_index('time',drop=True)
+        PMI_Inventory_value=PMI_Inventory[['value']]
+        PMI_Inventory_value.columns=['PMI_Inventory_Index']
+        PMI_Inventory_value=PMI_Inventory_value.sort_index()
+        #计算第一个信号（PMI原材料库存信号）
 
-        #和指数数据合并
-        merged_df = pd.merge(df, num_df[['ths_new_high_num_block','ths_new_low_num_block','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+        #处理极值和zscore化
+        def process_macro_data(data, column_name):
+            """
+            对输入的宏观数据进行极端值处理和Zscore标准化处理
+
+            参数：
+            data : pd.DataFrame
+                包含待处理数据的DataFrame
+            column_name : str
+                需要处理的列名
+
+            返回：
+            pd.DataFrame
+                包含处理后数据的DataFrame，新增列为 {column_name}_Zscore
+            """
+            # 确保列存在
+            if column_name not in data.columns:
+                raise ValueError(f"列名 {column_name} 不存在于输入数据中")
+            
+            # 计算均值和标准差
+            mean = data[column_name].mean()
+            std = data[column_name].std()
+
+            # 定义上下限
+            upper_limit = mean + 3 * std
+            lower_limit = mean - 3 * std
+
+            # 极端值处理
+            data[column_name] = data[column_name].clip(lower=lower_limit, upper=upper_limit)
+
+            # Zscore标准化处理
+            zscore_column_name = f"{column_name}_Zscore"
+            data[zscore_column_name] = (data[column_name] - mean) / std
+
+            return data[[column_name+'_Zscore']]
         
-        #计算涨跌停剪刀差
-        merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
-        merged_df['新高数量']=merged_df['ths_new_high_num_block']
-        merged_df['新低数量']=merged_df['ths_new_low_num_block']
-        merged_df['高低差']=(merged_df['新高数量']-merged_df['新低数量'])/merged_df['股票数量']
-        merged_df['高低差'].fillna(method='ffill', inplace=True)
-        # 确保merged_df的索引唯一
-        merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
+        PMI_Inventory_Index_Zscore=process_macro_data(PMI_Inventory_value,'PMI_Inventory_Index')
+        PMI_Inventory_Index_Zscore=PMI_Inventory_Index_Zscore.loc["2012-06-01":,:]
+        #输出PMI的信号
+        multiplier=window_1/10
+       
+        def generate_signals_with_cleaning(data, column_name, window=36, multiplier=0.8):
+            """
+            根据Zscore生成信号，并删除前36个月的数据以避免回测时出错
 
-        df['var_1'] = merged_df['高低差']
-        df['var_2'] = -0.2
-        df['var_3']=window_1/1000
-        # 根据条件生成信号值列
-        df.loc[(df["var_1"].shift(1) >= df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) < df["var_3"].shift(1)) & (df["var_1"] >= df["var_3"]) , 'signal'] = -1
+            参数：
+            data : pd.DataFrame
+                包含处理后数据的DataFrame
+            column_name : str
+                需要处理的列名（Zscore列）
+            window : int, 可选
+                滚动窗口大小，默认为36个月
+            multiplier : float, 可选
+                标准差的倍数，默认为0.8
 
-        # pos为空的，向上填充数字
-        df['signal'].fillna(method='ffill', inplace=True)
+            返回：
+            pd.DataFrame
+                包含信号的DataFrame，删除了前36个月的数据
+            """
+            if column_name not in data.columns:
+                raise ValueError(f"列名 {column_name} 不存在于输入数据中")
 
-        result=df
-        # 将信号合并回每日数据
-        daily_data = daily_data.join(result[['signal']], how='left')
-        daily_data[['signal']].fillna(0, inplace=True)
-        daily_data=daily_data.dropna()
+            # 计算滚动标准差
+            rolling_std = data[column_name].rolling(window=window).std()
 
-        # 存储结果
-        results[code] = daily_data
-        full_info[code]=result
+            # 计算正负0.8倍标准差
+            upper_bound = multiplier * rolling_std
+            lower_bound = -multiplier * rolling_std
 
+            # 初始化信号
+            signals = []
+
+            # 生成信号
+            for i in range(len(data)):
+                if i < window:  # 在滚动窗口大小之前，无数据可用
+                    signals.append(np.nan)
+                else:
+                    if data[column_name].iloc[i] > upper_bound.iloc[i]:
+                        signals.append(-1)  # 看空信号
+                    elif data[column_name].iloc[i] < lower_bound.iloc[i]:
+                        signals.append(1)  # 看多信号
+                    else:
+                        signals.append(signals[-1])  # 维持上一个信号
+
+            # 将信号加入数据框
+            data['Signal'] = signals
+
+            # 删除前36个月的数据（滚动窗口前的数据）
+            data = data.iloc[window:].copy()
+
+            return data[['Signal']]
+                
+        PMI_Signals = generate_signals_with_cleaning(PMI_Inventory_Index_Zscore, 'PMI_Inventory_Index_Zscore',multiplier=multiplier)
+
+        PMI_Signals.columns=['signal']
+
+        PMI_Signals.index=pd.to_datetime(PMI_Signals.index)
+
+        # 使用 resample 将月频转换为日频
+        PMI_Signals_daily = PMI_Signals.resample('D').ffill()
+        PMI_Signals_daily.index=pd.to_datetime(PMI_Signals_daily.index)
+        
+        #存储结果
+        total_info=pd.concat([daily_data,PMI_Signals_daily],axis=1)
+        first_signal_date=PMI_Signals_daily.index[0]
+        first_signal_formatted_date=first_signal_date.strftime('%Y-%m-%d')
+        total_info_selected=total_info.loc[first_signal_formatted_date:,:]
+
+        #填充缺失值
+        total_info_selected=total_info_selected.ffill()
+
+        signal=total_info_selected[['signal']]
+
+        daily_data.loc[:,"signal"]=signal
+
+        results[code] = daily_data.dropna()
+
+        full_info[code]=daily_data    
+    
     return results,full_info
 
 # 自定义数据类，包含 'signal'
@@ -75,9 +161,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class high_low_Strategy(bt.Strategy):
+class Inventory_Cycle_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.166),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -200,10 +286,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
-    'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'EDB':r'E:\数据库\同花顺EDB数据',
+    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
@@ -218,19 +303,18 @@ target_assets = [
 ]
 
 
-
 # 生成信号
-strategy_results,full_info = high_low(target_assets, paths)
+strategy_results,full_info = Inventory_Cycle(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(high_low_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(Inventory_Cycle_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='high_low_Strategy'
+strtegy_name='Inventory_Cycle_Strategy'
 
-#输出策略净值
+
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -245,7 +329,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-#AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=500,freq='D')
 
 
 #定义参数优化函数
@@ -341,15 +425,14 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(0, 20,1),
-    #'window_2':range(10,100,10),
+    'window_1': range(5, 21,1)
 }
 
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=high_low,
-#     strategy_class=high_low_Strategy,
+#     strategy_function=Inventory_Cycle,
+#     strategy_class=Inventory_Cycle_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
