@@ -1906,6 +1906,59 @@ class Downloading_And_Updating_Data():
 
         return
 
+    def Updating_Up_Down_Companies(self,End_Date,Data_Path):
+
+        Data_Path=Data_Path
+
+        os.chdir(Data_Path)
+
+        List=os.listdir()
+
+        Doc_Number=len(List)
+
+        print("更新开始")
+
+        for i in range(0,Doc_Number):
+
+            try:
+
+                df=pd.read_csv(Data_Path+"\\"+List[i],index_col=[0])
+
+                df.index=pd.to_datetime(df.index)
+
+                if df.index[-1].strftime('%Y-%m-%d')!=End_Date:
+
+                    New_Begin_Date=df.index[-1]+Day()
+
+                    New_Begin_Date=New_Begin_Date.strftime("%Y-%m-%d")
+
+                    code= List[i].replace('.csv', "")
+
+                    new_sdate=New_Begin_Date.replace('-','')
+
+                    new_edate=End_Date.replace('-','')
+
+                    new_data=THS_DR('p00112','sdate='+new_sdate+';'+'edate='+new_edate+';p0='+code,'p00112_f001:Y,p00112_f002:Y,p00112_f003:Y,p00112_f004:Y,p00112_f005:Y,p00112_f006:Y,p00112_f007:Y,p00112_f008:Y,p00112_f009:Y,p00112_f010:Y,p00112_f011:Y,p00112_f012:Y,p00112_f013:Y,p00112_f014:Y,p00112_f021:Y,p00112_f022:Y,p00112_f023:Y,p00112_f024:Y,p00112_f025:Y',
+                                    'format:dataframe').data
+                    new_data=new_data.set_index('p00112_f001',drop=True)
+                    new_data.index=pd.to_datetime(new_data.index)
+                    new_data=new_data.sort_index()
+                    Updated_Data=pd.concat([df,new_data],axis=0)
+
+                    Updated_Data.to_csv(List[i])
+
+                else:
+
+                    print("数据更新至最新")
+
+            except:
+
+                print(List[i]+"出现错误")
+
+        print("更新结束")
+
+        return
+
 
 DUD=Downloading_And_Updating_Data()
 
@@ -1957,9 +2010,12 @@ def Update_All(End_Date):
 
     DUD.Update_Cov_Bond_Vol_Price_Data(End_Date,Cov_Bond_Path)
 
+    #新高新低
     H_L_Path=r'D:\数据库\另类数据\新高新低'
 
     DUD.Updating_newHL_Data(End_Date,H_L_Path)
+
+    #高频数据更新
 
     Export_Path_60 = r'D:\数据库\同花顺ETF跟踪指数量价数据\1h' 
 
@@ -1971,14 +2027,21 @@ def Update_All(End_Date):
 
     DUD.Update_High_Freq_Vol_Price_Data(HF_End_Date,Export_Path_15,15)
 
+    #公司上涨数量更新
+    
+    Up_Down_Company_Path=r'D:\数据库\另类数据\涨跌家数'
+
+    DUD.Updating_Up_Down_Companies(End_Date,Up_Down_Company_Path)
+
+    #涨停跌停数量
+
+    up_path=r'D:\数据库\另类数据\涨停跌停'
+
+    DUD.Updating_updown_Data(End_Date,up_path)
+
+
     return print('updating finished')
 
 
-Update_All('2024-12-16')
-
-# code_list=['M004488064']
-
-# path=r'D:\数据库\同花顺EDB数据'
-
-# DUD.Download_EDB_Data(code_list,'2013-03-31','2024-12-13',path)
+Update_All('2024-12-18')
 

@@ -13,13 +13,7 @@ def alligator_strategy_with_ao_and_fractal_macd(target_assets, paths):
 
     for code in target_assets:
         # 读取数据
-        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
-        daily_data.index = pd.to_datetime(daily_data.index)
-        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
-        hourly_data.index = pd.to_datetime(hourly_data.index)
-        mins_15_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
-        mins_15_data.index = pd.to_datetime(mins_15_data.index)
-        mins_15_data = mins_15_data[~mins_15_data.index.duplicated(keep='first')]
+
 
         # 提取收盘价
         daily_data_close = daily_data[['close']]
