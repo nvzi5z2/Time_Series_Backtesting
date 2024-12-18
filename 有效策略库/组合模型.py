@@ -249,6 +249,7 @@ class Strategies:
             'EDB':r'D:\数据库\同花顺EDB数据',
             'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
             'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
             'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
@@ -832,6 +833,87 @@ class Strategies:
         return results,full_info
 
 
+    def UD(self,window_1=30,window_2=100):
+            #信号结果字典
+            results = {}
+            #全数据字典，包含计算指标用于检查
+            full_info={}
+            target_assets=self.target_assets
+            paths=self.paths
+            
+            #编写策略主体部分
+            for code in target_assets:
+                # 读取数据
+                daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+                daily_data.index = pd.to_datetime(daily_data.index)
+
+                df=daily_data.copy()
+
+                #将上涨、平、下跌数量和涨跌停数量合并
+                up_down_path=paths['up_down']
+                up_down=pd.read_csv(up_down_path)
+                up_company_path=paths['up_companies']
+                data = pd.read_csv(up_company_path)
+                data=data.rename(columns={'p00112_f001':'time'})
+                up_down['time'] = pd.to_datetime(up_down['time'])
+                data['time'] = pd.to_datetime(data['time'])
+                num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
+                num_df.set_index('time', inplace=True)
+
+                #和指数数据合并
+                merged_df = pd.merge(df, num_df[['ths_limit_up_stock_num_sector','ths_limit_down_stock_num_sector','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+                
+                #计算涨跌停剪刀差
+                merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
+                merged_df['涨停数量']=merged_df['ths_limit_up_stock_num_sector']
+                merged_df['跌停数量']=merged_df['ths_limit_down_stock_num_sector']
+                merged_df['涨跌停差']=(merged_df['涨停数量']-merged_df['跌停数量'])/merged_df['股票数量']
+
+                # 计算AMA
+                merged_df['AMA_30'] = merged_df['涨跌停差'].ewm(window_1).mean()
+                merged_df['AMA_100'] = merged_df['涨跌停差'].ewm(window_2).mean()
+                merged_df['AMA']=merged_df['AMA_30']/merged_df['AMA_100']
+
+
+                merged_df['ration']=merged_df['AMA']
+                # 确保merged_df的索引唯一
+                merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
+
+                df['var_1'] = merged_df['ration']
+                df['var_2'] = 1.15
+                df['var_3']=merged_df['AMA_30']
+                df['var_4']=merged_df['AMA_100']
+
+                # 根据条件生成信号值列
+                df['signal_1'] = -1  # 初始化信号列为 -1
+                condition = (df['var_1'] > df['var_2']) & (df['var_3'] > 0) & (df['var_4'] > 0)
+                df.loc[condition, 'signal_1'] = 1
+                
+                df['var_5'] = merged_df['涨跌停差']
+                df['var_6'] = -0.2
+                df['var_7']=0.019
+                # 根据条件生成信号值列
+                df.loc[(df["var_5"].shift(1) >= df["var_6"].shift(1)) & (df["var_5"] < df["var_6"]) , 'signal_2'] = 1
+                df.loc[(df["var_5"].shift(1) < df["var_7"].shift(1)) & (df["var_5"] >= df["var_7"]) , 'signal_2'] = -1
+                # pos为空的，向上填充数字
+                df['signal_2'].fillna(method='ffill', inplace=True)
+
+                df['signal_sum']=df['signal_1']+df['signal_2']
+                # 添加signal列，使用apply函数
+                df['signal'] = df['signal_sum'].apply(lambda x: 1 if x >= 0 else -1)
+                result=df
+                # 将信号合并回每日数据
+                daily_data = daily_data.join(result[['signal']], how='left')
+                daily_data[['signal']].fillna(0, inplace=True)
+                daily_data=daily_data.dropna()
+
+                # 存储结果
+                results[code] = daily_data
+                full_info[code]=result
+
+            return results,full_info
+
+
 
 
 # 实例化策略类
@@ -853,18 +935,20 @@ Inventory_Cycle_results,_=strategies_instance.Inventory_Cycle()
 
 #情绪类
 high_low_results,_=strategies_instance.high_low()
+UD_reults,_=strategies_instance.UD()
 
 # 定义添加信号的数据类
 Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0833, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0833, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0833, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.0625, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.0625, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0625, 'name': 'V_MACD', 'datas': V_MACD_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'PCR', 'datas': PCR_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'high_low', 'datas': high_low_results}
+    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'high_low', 'datas': high_low_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0625, 'name': 'UD', 'datas': UD_reults}
     ]
 
 # 运行组合回测

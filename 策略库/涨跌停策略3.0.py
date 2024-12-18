@@ -6,9 +6,8 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
 import numpy as np
-import talib as ta
+
 
 def UD(target_assets,paths,window_1=30,window_2=100):
     #信号结果字典
@@ -25,8 +24,11 @@ def UD(target_assets,paths,window_1=30,window_2=100):
         df=daily_data.copy()
 
         #将上涨、平、下跌数量和涨跌停数量合并
-        up_down=pd.read_csv(r'D:\1.工作文件\0.数据库\涨停跌停\001005010.csv')    
-        data = pd.read_csv(r'D:\1.工作文件\0.数据库\沪深涨跌家数.csv')
+        up_down_path=paths['up_down']
+        up_down=pd.read_csv(up_down_path)
+        up_company_path=paths['up_companies']
+        data = pd.read_csv(up_company_path)
+        data=data.rename(columns={'p00112_f001':'time'})
         up_down['time'] = pd.to_datetime(up_down['time'])
         data['time'] = pd.to_datetime(data['time'])
         num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
@@ -95,7 +97,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class UD_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.166),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -218,10 +220,10 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
+    'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
@@ -263,7 +265,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
