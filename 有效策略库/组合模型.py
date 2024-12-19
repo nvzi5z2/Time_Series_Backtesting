@@ -974,7 +974,7 @@ tools.Strategies_Corr_and_NV(pf_nv)
 
 #信号处理和目标仓位生成
 
-def caculate_signals_and_trades(debug_df,current_position,T0_Date):
+def caculate_signals_and_trades(debug_df,T0_Date,current_position):
 
     T0_debug=debug_df.loc[T0_Date,:]
 
