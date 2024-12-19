@@ -120,9 +120,9 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2019-01-04'
+        self.Begin_Date='2024-12-17'
 
-    def Portfolio(self,strategies,initial_cash=100000000):
+    def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
         # 创建策略名称到资金分配比例的映射
         allocation_map = {strat['name']: strat['allocation'] for strat in strategies}
@@ -969,4 +969,22 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
 tools.Strategies_Corr_and_NV(pf_nv)
+
+
+
+#信号处理和目标仓位生成
+
+def caculate_signals_and_trades(debug_df,current_position,T0_Date):
+
+    T0_debug=debug_df.loc[T0_Date,:]
+
+    #先把signal列的信号转换为0方便计算
+
+    T0_debug.loc[T0_debug['Signal']==-1,'Signal']=0
+
+    #计算应该下单的调整的size
+
+    adjusted_signal_and_size=T0_debug[['Asset,Signal','Size']]
+
+    adjusted_signal_and_size.loc[:,"adjusted_size"]=adjusted_signal_and_size.loc[:,"Signal"]*adjusted_signal_and_size.loc[:,"Size"]
 
