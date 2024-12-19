@@ -120,7 +120,7 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2024-12-17'
+        self.Begin_Date='2024-12-12'
 
     def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
@@ -235,6 +235,65 @@ class Tools:
 
         return corr_matrix
 
+    def caculate_signals_and_trades(self,debug_df,T0_Date,current_position):
+
+        T0_debug=debug_df.loc[T0_Date,:]
+
+        #先把signal列的信号转换为0方便计算
+
+        T0_debug.loc[T0_debug['Signal']==-1,'Signal']=0
+
+        #计算应该下单的调整的size
+
+        adjusted_signal_and_size=T0_debug[['Asset','Signal','Size','Close']]
+        adjusted_signal_and_size.loc[:,"adjusted_size"]=adjusted_signal_and_size.loc[:,"Signal"]*adjusted_signal_and_size.loc[:,"Size"]
+        adjusted_signal_and_size.loc[:,"trade_amount"]=adjusted_signal_and_size.loc[:,"adjusted_size"]*adjusted_signal_and_size.loc[:,"Close"]
+        Amount_List= adjusted_signal_and_size.groupby("Asset")["trade_amount"].sum().reset_index()
+
+        #提取当日总组合的价值
+
+        strategy_value=T0_debug.groupby("Strategy")["Value"].sum().reset_index()
+        number_of_assets= len(T0_debug['Asset'].unique())
+        strategy_value.loc[:,"Value"]=strategy_value.loc[:,"Value"]/number_of_assets
+        portfolio_value_sum=strategy_value.loc[:,"Value"].sum()
+        
+        #计算占比
+        pd.set_option("display.float_format", lambda x: f"{x:,.4f}")
+        Amount_List.loc[:,"portfolio_value"]=portfolio_value_sum
+        Amount_List=Amount_List.set_index('Asset',drop=True)
+        cash_trade_amount=portfolio_value_sum-Amount_List.loc[:,"trade_amount"].sum()
+        cash_row = pd.DataFrame({
+            'trade_amount': [cash_trade_amount],
+            'portfolio_value': portfolio_value_sum
+        }, index=['cash'])
+        Amount_result=pd.concat([Amount_List,cash_row],axis=0)
+
+        Amount_result.loc[:,"proportion"]=Amount_result.loc[:,"trade_amount"]/Amount_result.loc[:,"portfolio_value"]
+        
+
+        #和现有持仓进行对比
+
+        current_position_df=pd.DataFrame.from_dict(current_position, orient='index', columns=['current_position_value'])
+
+        # 计算 current_position_value 的总和
+        total_value = current_position_df['current_position_value'].sum()
+
+        # 添加占比列
+        current_position_df['current_position_ratio'] = (
+            current_position_df['current_position_value'] / total_value
+        )
+
+
+        #合并现有持仓和目标持仓表
+
+        result=pd.merge(Amount_result,current_position_df,right_index=True,left_index=True)
+
+        result.loc[:,"adjusted_position"]=result.loc[:,"proportion"]-result.loc[:,"current_position_ratio"]
+        
+        result.loc[:,"adjusted_value"]=total_value*result.loc[:,"adjusted_position"]
+        
+        return result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value']]
+
 
 # 定义策略类（设置数据路径和选择资产）
 class Strategies:
@@ -242,15 +301,15 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\数据库\同花顺EDB数据',
-            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
-            'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+            'daily': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\量化交易构建\市场数据库\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\量化交易构建\市场数据库\数据库\同花顺EDB数据',
+            'new_HL': r'D:\量化交易构建\市场数据库\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'D:\量化交易构建\市场数据库\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\量化交易构建\市场数据库\数据库\另类数据\涨停跌停\001005010.csv',
+            'pv_export':r"D:\量化交易构建\Time_Series_ Backtesting\PV"
         }
         # 定义选择的资产
         self.target_assets = ["000300.SH","000852.SH",
@@ -971,20 +1030,16 @@ AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns,
 tools.Strategies_Corr_and_NV(pf_nv)
 
 
-
 #信号处理和目标仓位生成
 
-def caculate_signals_and_trades(debug_df,T0_Date,current_position):
+T0_Date='2024-12-13'
 
-    T0_debug=debug_df.loc[T0_Date,:]
-
-    #先把signal列的信号转换为0方便计算
-
-    T0_debug.loc[T0_debug['Signal']==-1,'Signal']=0
-
-    #计算应该下单的调整的size
-
-    adjusted_signal_and_size=T0_debug[['Asset,Signal','Size']]
-
-    adjusted_signal_and_size.loc[:,"adjusted_size"]=adjusted_signal_and_size.loc[:,"Signal"]*adjusted_signal_and_size.loc[:,"Size"]
+current_position={'000300.SH':0,
+                "000852.SH":0,
+                '000905.SH':0,
+                "399006.SZ":0,
+                '399303.SZ':0,
+                'cash':1000000}
+                
+target_assets_position=tools.caculate_signals_and_trades(debug_df,T0_Date,current_position)
 
