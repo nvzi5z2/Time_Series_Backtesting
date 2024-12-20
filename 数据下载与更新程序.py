@@ -2043,5 +2043,5 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-Update_All('2024-12-18')
+Update_All('2024-12-19')
 

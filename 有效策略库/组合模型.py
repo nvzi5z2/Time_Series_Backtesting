@@ -120,7 +120,7 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2024-12-12'
+        self.Begin_Date='2024-12-17'
 
     def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
@@ -283,7 +283,6 @@ class Tools:
             current_position_df['current_position_value'] / total_value
         )
 
-
         #合并现有持仓和目标持仓表
 
         result=pd.merge(Amount_result,current_position_df,right_index=True,left_index=True)
@@ -292,7 +291,36 @@ class Tools:
         
         result.loc[:,"adjusted_value"]=total_value*result.loc[:,"adjusted_position"]
         
-        return result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value']]
+        #和昨日的信号精选对比
+
+        T0_Date_datetime=pd.Timestamp(T0_Date)
+        unique_dates =debug_df.index.unique()
+        target_index =unique_dates.get_loc(T0_Date_datetime)
+        if target_index > 0:
+            previous_date = unique_dates[target_index - 1]
+
+        previous_date_df=debug_df.loc[previous_date,:]
+
+        #抽取信号信息和表弟信息
+        previous_date_signal=previous_date_df[['Asset',"Strategy",'Signal']]
+        previous_date_signal=previous_date_signal.reset_index(drop=True)
+        yesterday_result = previous_date_signal.pivot(index='Asset', columns='Strategy', values='Signal')
+        
+        T0_debug_signal=debug_df.loc[T0_Date,:]
+
+        T0_debug_signal=T0_debug_signal[['Asset',"Strategy",'Signal']]
+        T0_debug_signal=T0_debug_signal.reset_index(drop=True)
+        T0_result = T0_debug_signal.pivot(index='Asset', columns='Strategy', values='Signal')
+        
+        comparison = T0_result == yesterday_result
+
+        if not comparison.values.all():  # 如果存在 False
+            print("信号改变")
+        else:
+            print("信号没有改变")
+
+        
+        return result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value']],comparison
 
 
 # 定义策略类（设置数据路径和选择资产）
@@ -301,15 +329,15 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\量化交易构建\市场数据库\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\量化交易构建\市场数据库\数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\量化交易构建\市场数据库\数据库\同花顺EDB数据',
-            'new_HL': r'D:\量化交易构建\市场数据库\数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\量化交易构建\市场数据库\数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\量化交易构建\市场数据库\数据库\另类数据\涨停跌停\001005010.csv',
-            'pv_export':r"D:\量化交易构建\Time_Series_ Backtesting\PV"
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\数据库\同花顺EDB数据',
+            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
+            'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
         self.target_assets = ["000300.SH","000852.SH",
@@ -1025,21 +1053,21 @@ index_price_path=strategies_instance.paths['daily']
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfolio_nv, freq='D')
 
-AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
+# AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
 tools.Strategies_Corr_and_NV(pf_nv)
 
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-13'
+T0_Date='2024-12-19'
 
-current_position={'000300.SH':0,
-                "000852.SH":0,
-                '000905.SH':0,
-                "399006.SZ":0,
-                '399303.SZ':0,
-                'cash':1000000}
+current_position={'000300.SH':23539.90,
+                "000852.SH":23770.80,
+                '000905.SH':23342.40,
+                "399006.SZ":23208.30,
+                '399303.SZ':23895.00,
+                'cash':877279.20}
                 
-target_assets_position=tools.caculate_signals_and_trades(debug_df,T0_Date,current_position)
+target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date,current_position)
 
