@@ -5,6 +5,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from analyzing_tools import Analyzing_Tools
+from iFinDPy import *
+
+def thslogindemo():
+    # 输入用户的帐号和密码
+    thsLogin = THS_iFinDLogin("hwqh100","155d50")
+    print(thsLogin)
+    if thsLogin != 0:
+        print('登录失败')
+    else:
+        print('登录成功')
+
+thslogindemo()
 
 
 # 定义自定义数据类
@@ -120,9 +132,27 @@ class Tools:
 
     def __init__(self):
 
+<<<<<<< HEAD
         self.Begin_Date='2023-01-04'
+=======
+        self.Begin_Date='2024-12-17'
+>>>>>>> origin/main
 
-    def Portfolio(self,strategies,initial_cash=100000000):
+        self.current_position={'000300.SH':23539.90,
+                "000852.SH":23770.80,
+                '000905.SH':23342.40,
+                "399006.SZ":23208.30,
+                '399303.SZ':23895.00,
+                'cash':877279.20}
+
+        self.ETF_code={'000300.SH':'510310.SH',
+                "000852.SH":"159845.SZ",
+                '000905.SH':"512500.SH",
+                "399006.SZ":"159915.SZ",
+                '399303.SZ':"159628.SZ"}
+        
+        
+    def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
         # 创建策略名称到资金分配比例的映射
         allocation_map = {strat['name']: strat['allocation'] for strat in strategies}
@@ -234,6 +264,108 @@ class Tools:
         plt.show()
 
         return corr_matrix
+
+    def caculate_signals_and_trades(self,debug_df,T0_Date):
+
+        current_position=self.current_position
+        ETF_code=self.ETF_code
+        T0_debug=debug_df.loc[T0_Date,:]
+
+        #先把signal列的信号转换为0方便计算
+
+        T0_debug.loc[T0_debug['Signal']==-1,'Signal']=0
+
+        #计算应该下单的调整的size
+
+        adjusted_signal_and_size=T0_debug[['Asset','Signal','Size','Close']]
+        adjusted_signal_and_size.loc[:,"adjusted_size"]=adjusted_signal_and_size.loc[:,"Signal"]*adjusted_signal_and_size.loc[:,"Size"]
+        adjusted_signal_and_size.loc[:,"trade_amount"]=adjusted_signal_and_size.loc[:,"adjusted_size"]*adjusted_signal_and_size.loc[:,"Close"]
+        Amount_List= adjusted_signal_and_size.groupby("Asset")["trade_amount"].sum().reset_index()
+
+        #提取当日总组合的价值
+
+        strategy_value=T0_debug.groupby("Strategy")["Value"].sum().reset_index()
+        number_of_assets= len(T0_debug['Asset'].unique())
+        strategy_value.loc[:,"Value"]=strategy_value.loc[:,"Value"]/number_of_assets
+        portfolio_value_sum=strategy_value.loc[:,"Value"].sum()
+        
+        #计算占比
+        pd.set_option("display.float_format", lambda x: f"{x:,.4f}")
+        Amount_List.loc[:,"portfolio_value"]=portfolio_value_sum
+        Amount_List=Amount_List.set_index('Asset',drop=True)
+        cash_trade_amount=portfolio_value_sum-Amount_List.loc[:,"trade_amount"].sum()
+        cash_row = pd.DataFrame({
+            'trade_amount': [cash_trade_amount],
+            'portfolio_value': portfolio_value_sum
+        }, index=['cash'])
+        Amount_result=pd.concat([Amount_List,cash_row],axis=0)
+        Amount_result.loc[:,"proportion"]=Amount_result.loc[:,"trade_amount"]/Amount_result.loc[:,"portfolio_value"]
+        
+
+        #和现有持仓进行对比
+
+        current_position_df=pd.DataFrame.from_dict(current_position, orient='index', columns=['current_position_value'])
+        # 计算 current_position_value 的总和
+        total_value = current_position_df['current_position_value'].sum()
+
+        # 添加占比列
+        current_position_df['current_position_ratio'] = (
+            current_position_df['current_position_value'] / total_value
+        )
+
+        #合并现有持仓和目标持仓表
+
+        result=pd.merge(Amount_result,current_position_df,right_index=True,left_index=True)
+        result.loc[:,"adjusted_position"]=result.loc[:,"proportion"]-result.loc[:,"current_position_ratio"]
+        result.loc[:,"adjusted_value"]=total_value*result.loc[:,"adjusted_position"]
+
+
+        #根据昨日收盘价计算调仓
+        
+        index_code=result.index.to_list()
+        index_code_list=index_code[:-1]
+        etf_close_price=[]
+        for code in index_code_list:
+            etf=ETF_code[code]
+            close=THS_HQ(etf,'close','',T0_Date,T0_Date).data
+            close_price=close["close"].values[0]
+            etf_close_price.append(close_price)
+        etf_close_price.append(0)
+        result.loc[:,"etf_close_price"]=etf_close_price
+        result.loc[:,"adjusted_shares"]=result.loc[:,"adjusted_value"]/result.loc[:,"etf_close_price"]
+        
+        #和昨日的信号精选对比
+
+        T0_Date_datetime=pd.Timestamp(T0_Date)
+        unique_dates =debug_df.index.unique()
+        target_index =unique_dates.get_loc(T0_Date_datetime)
+        if target_index > 0:
+            previous_date = unique_dates[target_index - 1]
+
+        previous_date_df=debug_df.loc[previous_date,:]
+
+        #抽取信号信息和表弟信息
+        previous_date_signal=previous_date_df[['Asset',"Strategy",'Signal']]
+        previous_date_signal=previous_date_signal.reset_index(drop=True)
+        yesterday_result = previous_date_signal.pivot(index='Asset', columns='Strategy', values='Signal')
+        
+        T0_debug_signal=debug_df.loc[T0_Date,:]
+
+        T0_debug_signal=T0_debug_signal[['Asset',"Strategy",'Signal']]
+        T0_debug_signal=T0_debug_signal.reset_index(drop=True)
+        T0_result = T0_debug_signal.pivot(index='Asset', columns='Strategy', values='Signal')
+        
+        comparison = T0_result == yesterday_result
+
+        if not comparison.values.all():  # 如果存在 False
+            print("信号改变")
+        else:
+            print("信号没有改变")
+
+        result=result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value',
+                        'etf_close_price','adjusted_shares']]
+        
+        return result,comparison
 
 
 # 定义策略类（设置数据路径和选择资产）
@@ -966,7 +1098,14 @@ index_price_path=strategies_instance.paths['daily']
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfolio_nv, freq='D')
 
-AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
+# AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-tools.Strategies_Corr_and_NV(pf_nv)
+# tools.Strategies_Corr_and_NV(pf_nv)
+
+
+#信号处理和目标仓位生成
+
+T0_Date='2024-12-19'
+
+target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 

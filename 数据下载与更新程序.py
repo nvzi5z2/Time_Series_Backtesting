@@ -2043,7 +2043,11 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
+<<<<<<< HEAD
 Update_All('2024-12-19')
+=======
+Update_All('2024-12-20')
+>>>>>>> origin/main
 
 # code_list=['000985.CSI']
 # Begin_Date='2003-01-01'
