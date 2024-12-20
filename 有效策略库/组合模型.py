@@ -5,6 +5,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from analyzing_tools import Analyzing_Tools
+from iFinDPy import *
+
+def thslogindemo():
+    # 输入用户的帐号和密码
+    thsLogin = THS_iFinDLogin("hwqh100","155d50")
+    print(thsLogin)
+    if thsLogin != 0:
+        print('登录失败')
+    else:
+        print('登录成功')
+
+thslogindemo()
 
 
 # 定义自定义数据类
@@ -122,6 +134,20 @@ class Tools:
 
         self.Begin_Date='2024-12-17'
 
+        self.current_position={'000300.SH':23539.90,
+                "000852.SH":23770.80,
+                '000905.SH':23342.40,
+                "399006.SZ":23208.30,
+                '399303.SZ':23895.00,
+                'cash':877279.20}
+
+        self.ETF_code={'000300.SH':'510310.SH',
+                "000852.SH":"159845.SZ",
+                '000905.SH':"512500.SH",
+                "399006.SZ":"159915.SZ",
+                '399303.SZ':"159628.SZ"}
+        
+        
     def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
         # 创建策略名称到资金分配比例的映射
@@ -235,8 +261,10 @@ class Tools:
 
         return corr_matrix
 
-    def caculate_signals_and_trades(self,debug_df,T0_Date,current_position):
+    def caculate_signals_and_trades(self,debug_df,T0_Date):
 
+        current_position=self.current_position
+        ETF_code=self.ETF_code
         T0_debug=debug_df.loc[T0_Date,:]
 
         #先把signal列的信号转换为0方便计算
@@ -267,14 +295,12 @@ class Tools:
             'portfolio_value': portfolio_value_sum
         }, index=['cash'])
         Amount_result=pd.concat([Amount_List,cash_row],axis=0)
-
         Amount_result.loc[:,"proportion"]=Amount_result.loc[:,"trade_amount"]/Amount_result.loc[:,"portfolio_value"]
         
 
         #和现有持仓进行对比
 
         current_position_df=pd.DataFrame.from_dict(current_position, orient='index', columns=['current_position_value'])
-
         # 计算 current_position_value 的总和
         total_value = current_position_df['current_position_value'].sum()
 
@@ -286,10 +312,23 @@ class Tools:
         #合并现有持仓和目标持仓表
 
         result=pd.merge(Amount_result,current_position_df,right_index=True,left_index=True)
-
         result.loc[:,"adjusted_position"]=result.loc[:,"proportion"]-result.loc[:,"current_position_ratio"]
-        
         result.loc[:,"adjusted_value"]=total_value*result.loc[:,"adjusted_position"]
+
+
+        #根据昨日收盘价计算调仓
+        
+        index_code=result.index.to_list()
+        index_code_list=index_code[:-1]
+        etf_close_price=[]
+        for code in index_code_list:
+            etf=ETF_code[code]
+            close=THS_HQ(etf,'close','',T0_Date,T0_Date).data
+            close_price=close["close"].values[0]
+            etf_close_price.append(close_price)
+        etf_close_price.append(0)
+        result.loc[:,"etf_close_price"]=etf_close_price
+        result.loc[:,"adjusted_shares"]=result.loc[:,"adjusted_value"]/result.loc[:,"etf_close_price"]
         
         #和昨日的信号精选对比
 
@@ -319,8 +358,10 @@ class Tools:
         else:
             print("信号没有改变")
 
+        result=result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value',
+                        'etf_close_price','adjusted_shares']]
         
-        return result[['trade_amount','proportion','current_position_ratio','adjusted_position','adjusted_value']],comparison
+        return result,comparison
 
 
 # 定义策略类（设置数据路径和选择资产）
@@ -1055,19 +1096,12 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 
 # AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-tools.Strategies_Corr_and_NV(pf_nv)
+# tools.Strategies_Corr_and_NV(pf_nv)
 
 
 #信号处理和目标仓位生成
 
 T0_Date='2024-12-19'
 
-current_position={'000300.SH':23539.90,
-                "000852.SH":23770.80,
-                '000905.SH':23342.40,
-                "399006.SZ":23208.30,
-                '399303.SZ':23895.00,
-                'cash':877279.20}
-                
-target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date,current_position)
+target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
