@@ -1996,15 +1996,9 @@ def Update_All(End_Date):
 
     DUD.Updating_ETF_Option(End_Date,ETF_Option_Path)
 
-<<<<<<< HEAD
     Forcast_Data_Path=r'D:\数据库\同花顺ETF跟踪指数一致预期数据\盈利预测综合值'
 
     DUD.Update_Index_Forcast_Data(End_Date,Forcast_Data_Path)
-=======
-    #A50_Path=r'D:\1.工作文件\0.数据库\另类数据\A50期货数据'
-
-    #DUD.Updating_A50_Futures_Data(End_Date,A50_Path)
->>>>>>> origin/main
 
     Cov_Bond_Path=r'D:\数据库\同花顺可转债数据'
 
@@ -2045,7 +2039,7 @@ def Update_All(End_Date):
 #海外数据第二天更新
 def Update_Oversea_Data(End_Date):
 
-    A50_Path=r'D:\数据库\另类数据\A50期货数据'
+    A50_Path=r'E:\数据库\另类数据\A50期货数据'
 
     DUD.Updating_A50_Futures_Data(End_Date,A50_Path)
 
@@ -2054,14 +2048,12 @@ def Update_Oversea_Data(End_Date):
 
 # Update_All('2024-12-20')
 
-<<<<<<< HEAD
-=======
-Update_All('2024-12-23')
->>>>>>> origin/main
+Code_List=['CN0Y.SG']
 
-# code_list=['000985.CSI']
-# Begin_Date='2003-01-01'
-# End_Date='2024-12-18'
-# path=r'D:\数据库\同花顺ETF跟踪指数量价数据'
-# DUD.Downloading_Market_Vol_Price_Data(code_list,Begin_Date,End_Date,path)
+Begin_Date='2016-10-28'
 
+End_Date='2024-12-23'
+
+Path=r'E:\数据库\另类数据\A50期货数据'
+
+DUD.Downloading_A50_Futures_Data(Code_List,Begin_Date,End_Date,Path)
