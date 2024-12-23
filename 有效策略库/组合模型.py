@@ -132,11 +132,7 @@ class Tools:
 
     def __init__(self):
 
-<<<<<<< HEAD
-        self.Begin_Date='2023-01-04'
-=======
         self.Begin_Date='2024-12-17'
->>>>>>> origin/main
 
         self.current_position={'000300.SH':23539.90,
                 "000852.SH":23770.80,
@@ -374,14 +370,14 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\1.工作文件\0.数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\1.工作文件\0.数据库\同花顺EDB数据',
-            'new_HL': r'D:\1.工作文件\0.数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\1.工作文件\0.数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\1.工作文件\0.数据库\另类数据\涨停跌停\001005010.csv',
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\数据库\同花顺EDB数据',
+            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
             #'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
@@ -1105,7 +1101,7 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-19'
+T0_Date='2024-12-20'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
