@@ -9,7 +9,7 @@ import seaborn as sns
 import talib
 import numpy as np
 
-def DEMAKER(target_assets,paths,window_1=20):
+def FS(target_assets,paths,window_1=20):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -33,7 +33,7 @@ def DEMAKER(target_assets,paths,window_1=20):
         #导入富时A50
         data = pd.read_csv(r'D:\1.工作文件\0.数据库\另类数据\A50期货数据\CN0Y.SG.csv')
         #导入中证全指
-        zzqz=pd.read_csv(r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d\000985.CSI.csv')
+        zzqz=pd.read_csv(os.path.join(paths['daily'], f"{'000985.CSI'}.csv"))
         #日期
         data['time'] = pd.to_datetime(data['time'])
         zzqz['time'] = pd.to_datetime(zzqz['time'])
@@ -83,7 +83,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class DEMAKER_Strategy(bt.Strategy):
+class FS_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -227,15 +227,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = DEMAKER(target_assets, paths)
+strategy_results,full_info = FS(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(DEMAKER_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(FS_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='DEMAKER_Strategy'
+strtegy_name='FS_Strategy'
 
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
@@ -245,7 +245,7 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, fre
 # 获取净值序列
 index_price_path=paths['daily']
 
-AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
+#AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
@@ -353,14 +353,14 @@ parameter_grid = {
 }
 
 # # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=DEMAKER,
-#     strategy_class=DEMAKER_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=FS,
+    strategy_class=FS_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0005,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)
