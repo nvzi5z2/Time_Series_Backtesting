@@ -212,7 +212,7 @@ class PandasDataPlussignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class Alligator_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -333,15 +333,14 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 # # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",

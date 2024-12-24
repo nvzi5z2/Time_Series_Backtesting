@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from analyzing_tools import Analyzing_Tools
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 from iFinDPy import *
 
 def thslogindemo():
@@ -145,8 +146,7 @@ class Tools:
                 "000852.SH":"159845.SZ",
                 '000905.SH':"512500.SH",
                 "399006.SZ":"159915.SZ",
-                '399303.SZ':"159628.SZ"}
-        
+                '399303.SZ':"159628.SZ"}       
         
     def Portfolio(self,strategies,initial_cash=10000000):
         Begin_Date=self.Begin_Date
@@ -362,6 +362,45 @@ class Tools:
                         'etf_close_price','adjusted_shares']]
         
         return result,comparison
+    
+    def set_clusters(self,Corr_df,n_groups):
+        # 假设 Corr_df 是已经计算好的相关性矩阵
+        # 转换相关性为距离
+        distance_matrix = 1 - Corr_df
+
+        # 执行层次聚类
+        linked = linkage(distance_matrix, 'average')
+
+        # 绘制树状图来观察聚类情况
+        dendrogram(linked, labels=Corr_df.index)
+        plt.title('Dendrogram')
+        plt.xlabel('Strategy Index')
+        plt.ylabel('Distance')
+        # plt.axhline(y=1.4, color='r', linestyle='--')  # 添加一条红线表示截断位置
+        plt.show()
+
+        # # 根据树状图选择的截断值进行聚类
+        # clusters = fcluster(linked, 1.4, criterion='distance')
+
+        # 直接指定生成三个聚类
+        clusters = fcluster(linked, n_groups, criterion='maxclust')
+
+        # 将聚类结果添加到原始 DataFrame 中
+        Corr_df['Cluster'] = clusters
+
+        # 输出聚类结果
+        print(Corr_df['Cluster'])
+
+        # 创建一个字典来存储每个聚类的成员列表
+        cluster_dict = {}
+        for cluster_id in np.unique(clusters):
+            cluster_dict[cluster_id] = list(Corr_df.index[Corr_df['Cluster'] == cluster_id])
+
+        # 输出每个聚类的成员
+        for key, value in cluster_dict.items():
+            print(f"Cluster {key}: {value}")
+
+        return cluster_dict
 
 
 # 定义策略类（设置数据路径和选择资产）
@@ -370,23 +409,23 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\数据库\同花顺EDB数据',
-            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
-            'A50': r'D:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
-            #'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'E:\数据库\另类数据\ETF期权数据',
+            'EDB':r'E:\数据库\同花顺EDB数据',
+            'new_HL': r'E:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'E:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'E:\数据库\另类数据\涨停跌停\001005010.csv',
+            'A50': r'E:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
+            #'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
         self.target_assets = ["000300.SH","000852.SH",
                               "000905.SH", "399006.SZ","399303.SZ"]
 
     # 突破类策略
-    def UDVD(self,window_1=34):
+    def UDVD(self,window_1=27):
         # 信号结果字典
         results = {}
         # 全数据字典，包含计算指标用于检查
@@ -639,8 +678,53 @@ class Strategies:
                 ('signal', -1),  # 默认情况下，'signal' 列在最后一列   
             )
 
+    def SMA_H(self,window_1=61,window_2=101):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+        
+        paths=self.paths
+
+        target_assets=self.target_assets
+
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+            df=daily_data.copy()
+            hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+            hourly_data.index = pd.to_datetime(hourly_data.index)
+
+            hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
+            hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
+            # 添加信号列
+            hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
+            hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+            
+            hourly_data['signal'].fillna(method='ffill', inplace=True)
+            hourly_exchange = hourly_data.resample('D').last()
+
+            df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+            df['signal'].fillna(method='ffill', inplace=True)
+
+
+            result=df
+
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
+
     # 成交量类策略
-    def V_MACD(self,window_1=39,window_2=0):
+    def V_MACD(self,window_1=42,window_2=0):
         # 信号结果字典
         results = {}
         # 全数据字典，包含计算指标用于检查
@@ -962,7 +1046,7 @@ class Strategies:
         return results,full_info
 
 
-    def UD(self,window_1=30,window_2=100):
+    def UD(self,window_1=38,window_2=65):
             #信号结果字典
             results = {}
             #全数据字典，包含计算指标用于检查
@@ -1125,6 +1209,7 @@ tools=Tools()
 UDVD_results,_= strategies_instance.UDVD()
 Alligator_results,_ = strategies_instance.Alligator_strategy_with_Ao_and_Fractal_Macd()
 V_MACD_results,_ = strategies_instance.V_MACD()
+SMA_H_results,_=strategies_instance.SMA_H()
 
 #期权类
 PCR_results,_=strategies_instance.PCR()
@@ -1145,12 +1230,12 @@ Adding_Signal = PandasDataPlusSignal
 # 定义策略和资金分配比例
 strategies_list = [
     {'strategy': EqualWeightsStrategy, 'allocation': 0.05625, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.05625, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'SMA_H', 'datas': SMA_H_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'UD', 'datas': UD_reults},
     {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'PCR', 'datas': PCR_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'high_low', 'datas': high_low_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'UD', 'datas': UD_reults},
     {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
@@ -1171,7 +1256,9 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-tools.Strategies_Corr_and_NV(pf_nv)
+Corr=tools.Strategies_Corr_and_NV(pf_nv)
+
+# tools.set_clusters(Corr,5)
 
 
 #信号处理和目标仓位生成

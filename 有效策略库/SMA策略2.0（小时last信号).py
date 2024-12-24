@@ -4,11 +4,12 @@ import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
 from itertools import product
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
-def V_MACD(target_assets,paths,window_1=42,window_2=0):
+
+def SMA_H(target_assets, paths,window_1=61,window_2=101):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -19,35 +20,25 @@ def V_MACD(target_assets,paths,window_1=42,window_2=0):
         # 读取数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
-
         df=daily_data.copy()
+        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+        hourly_data.index = pd.to_datetime(hourly_data.index)
 
-        volume = df['volume']
-        df['EMA_F'] =volume.ewm(12).mean()
-        df['EMA_S'] = volume.ewm(26).mean()
-        df['V_DIF'] = df['EMA_F'] - df['EMA_S']
-        df['V_DEA'] = df['V_DIF'].ewm(9).mean()
-        df['VMACD']=(df['V_DIF']-df['V_DEA'])*2
+        hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
+        hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
+        # 添加信号列
+        hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
+        hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+        
+        hourly_data['signal'].fillna(method='ffill', inplace=True)
+        hourly_exchange = hourly_data.resample('D').last()
 
-        #标准化处理
-        df['VMACD_mean'] = df['VMACD'].rolling(window_1).mean()
-        df['VMACD_std'] = df['VMACD'].rolling(window_1).std()
-        df['Z_VMACD'] = (df['VMACD'] - df['VMACD_mean']) / df['VMACD_std']
-        df['VMACD_MTM'] = df['Z_VMACD'].rolling(window_1).sum()
-
-        # 计算
-        df["var_1"] = df['VMACD_MTM']
-        df["var_2"] = window_2/10
-        df["var_3"] = -window_2/10
-
-        # 信号触发条件
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_3"].shift(1)) & (df["var_1"] <= df["var_3"]), 'signal'] = -1
-
-        # pos为空的，向上填充数字
+        df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
         df['signal'].fillna(method='ffill', inplace=True)
 
+
         result=df
+
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
@@ -67,7 +58,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class V_MACD_Strategy(bt.Strategy):
+class SMA_H_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -157,7 +148,7 @@ class V_MACD_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -211,32 +202,32 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = V_MACD(target_assets, paths)
+strategy_results,full_info = SMA_H(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(V_MACD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(SMA_H_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='V_MACD_Strategy'
-
+strtegy_name='SMA_H'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# 获取净值序列
 index_price_path=paths['daily']
 
+# 获取净值序列
 AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
-#蒙特卡洛分析
+#蒙特卡洛测试
 
 AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+
 
 
 #定义参数优化函数
@@ -268,29 +259,24 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        try:
-            print(f"正在测试参数组合：{params}")
-            # 生成当前参数下的信号
-            strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-            # 运行回测
-            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-            # 获取净值序列
-            pv = strat.get_net_value_series()
+        # 获取净值序列
+        pv = strat.get_net_value_series()
 
-            # 计算绩效指标
-            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-            # 收集指标和参数
-            result_entry = {k: v for k, v in params.items()}
-            result_entry.update(metrics)
-            result_entry=pd.DataFrame(result_entry)
-            results.append(result_entry)
-
-        except:
-
-            print(f"参数组合出现错误：{params}")
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
+        results.append(result_entry)
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -313,15 +299,11 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         param2 = param_names[1]
         pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
 
-        plt.figure(figsize=(15, 12))  # 调整图像大小
-        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis',
-                    annot_kws={"size": 8}, linewidths=0.5, linecolor='white')
-        plt.title(f'{metric} Heatmap', fontsize=16)
-        plt.ylabel(param1, fontsize=14)
-        plt.xlabel(param2, fontsize=14)
-        plt.xticks(rotation=45)
-        plt.yticks(rotation=0)
-        plt.tight_layout()  # 自动调整布局
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+        plt.title(f'{metric} Heatmap')
+        plt.ylabel(param1)
+        plt.xlabel(param2)
         plt.show()
     else:
         print("无法可视化超过两个参数的结果，请减少参数数量。")
@@ -329,22 +311,21 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
-
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(30, 50,1),
-    #'window_2':range(0,3,5),
+    'window_1': range(50, 80,5),
+    'window_2': range(80, 110, 5)
 }
 
-# # # 运行参数优化
+# 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=V_MACD,
-#     strategy_class=V_MACD_Strategy,
+#     strategy_function=SMA_H,
+#     strategy_class=SMA_H_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
-#     commission=0.0005,
+#     commission=0.0002,
 #     slippage_perc=0.0005,
 #     metric='sharpe_ratio'
 # )
