@@ -132,18 +132,14 @@ class Tools:
 
     def __init__(self):
 
-<<<<<<< HEAD
-        self.Begin_Date='2023-01-04'
-=======
         self.Begin_Date='2024-12-17'
->>>>>>> origin/main
 
-        self.current_position={'000300.SH':23539.90,
-                "000852.SH":23770.80,
-                '000905.SH':23342.40,
-                "399006.SZ":23208.30,
-                '399303.SZ':23895.00,
-                'cash':877279.20}
+        self.current_position={'000300.SH':23576.50,
+                "000852.SH":23110.50,
+                '000905.SH':22968,
+                "399006.SZ":22972.90,
+                '399303.SZ':23062.53,
+                'cash':882620.94}
 
         self.ETF_code={'000300.SH':'510310.SH',
                 "000852.SH":"159845.SZ",
@@ -374,14 +370,15 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\1.工作文件\0.数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\1.工作文件\0.数据库\同花顺EDB数据',
-            'new_HL': r'D:\1.工作文件\0.数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\1.工作文件\0.数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\1.工作文件\0.数据库\另类数据\涨停跌停\001005010.csv',
+            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'E:\数据库\另类数据\ETF期权数据',
+            'EDB':r'E:\数据库\同花顺EDB数据',
+            'new_HL': r'E:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'E:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'E:\数据库\另类数据\涨停跌停\001005010.csv',
+            'A50': r'E:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
             #'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
@@ -1045,6 +1042,76 @@ class Strategies:
 
             return results,full_info
 
+    #外资类
+    
+    def FS_A50(self,window_1=20):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+        target_assets=self.target_assets
+        paths=self.paths
+        
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+
+            df=daily_data.copy()
+            df = df.round(0)
+            # 使用需要的列，通常是高、低、收盘价
+            close = df["close"]    
+            low = df["low"]
+            open= df['open']
+            high = df["high"]
+            volume = df['volume']
+
+            #导入富时A50
+            A50_Path=paths['A50']
+            data = pd.read_csv(A50_Path)
+            #导入中证全指
+            zzqz=pd.read_csv(os.path.join(paths['daily'], f"{'000985.CSI'}.csv"))
+            #日期
+            data['time'] = pd.to_datetime(data['time'])
+            zzqz['time'] = pd.to_datetime(zzqz['time'])
+            #self.df['time'] = pd.to_datetime(self.df['time'])
+            #按照时间升序排列
+            data= data.sort_values(by='time')
+            zzqz= zzqz.sort_values(by='time')
+            #计算涨跌幅
+            data['chg']=(data['ths_close_price_future']-data['ths_open_price_future'])/data['ths_open_price_future']
+            merged_df = pd.merge(zzqz, data[['time', 'chg']], left_on='time', right_on='time', how='left')
+            # 向下填充'value'列的NaN值
+            merged_df['chg'].fillna(method='ffill', inplace=True)
+            #计算富时A50及中证全指差值
+            merged_df['diff']=merged_df['chg']-(merged_df['close']-merged_df['open'])/merged_df['open']
+            #将中证全债及富时A50的差合并到df中
+            merged_df.set_index('time', inplace=True)   
+
+            df = pd.merge(df, merged_df[['diff']], left_index=True, right_index=True, how='left')
+
+
+            df['var_1'] = df['diff']
+            df['var_2'] = window_1/1000
+            
+            df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
+            df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = -1
+
+            # pos为空的，向上填充数字
+            df['signal'].fillna(method='ffill', inplace=True)
+
+            result=df
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
 
 
 
@@ -1069,6 +1136,9 @@ Inventory_Cycle_results,_=strategies_instance.Inventory_Cycle()
 high_low_results,_=strategies_instance.high_low()
 UD_reults,_=strategies_instance.UD()
 
+#外资类
+FS_A50_results,_=strategies_instance.FS_A50()
+
 # 定义添加信号的数据类
 Adding_Signal = PandasDataPlusSignal
 
@@ -1081,6 +1151,7 @@ strategies_list = [
     {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'high_low', 'datas': high_low_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.0625, 'name': 'UD', 'datas': UD_reults}
+    # {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
 # 运行组合回测
@@ -1098,14 +1169,14 @@ index_price_path=strategies_instance.paths['daily']
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfolio_nv, freq='D')
 
-# AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
+AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-# tools.Strategies_Corr_and_NV(pf_nv)
+tools.Strategies_Corr_and_NV(pf_nv)
 
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-19'
+T0_Date='2024-12-23'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 

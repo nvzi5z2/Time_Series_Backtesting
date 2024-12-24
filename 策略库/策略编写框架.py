@@ -6,75 +6,73 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
 import numpy as np
 
-def DEMAKER(target_assets,paths,window_1=20):
-    #信号结果字典
+def DonchianBreakout(target_assets, paths, high_window=20, low_window=20, ma_short=25, ma_long=350):
+    """
+    唐奇安通道突破策略（修正版本）
+    :param target_assets: 股票代码列表
+    :param paths: 数据路径字典，包含'daily'路径
+    :param high_window: 计算过去N日（不包含T0日）最高价的窗口
+    :param low_window: 计算过去N日（不包含T0日）最低价的窗口
+    :param ma_short: 短期均线窗口
+    :param ma_long: 长期均线窗口
+    :return: 策略信号和完整数据
+    """
+    # 信号结果字典
     results = {}
-    #全数据字典，包含计算指标用于检查
-    full_info={}
-    
-    #编写策略主体部分
+    # 全数据字典，包含计算指标用于检查
+    full_info = {}
+
+    # 编写策略主体部分
     for code in target_assets:
         # 读取数据
-        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+        daily_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
 
-        df=daily_data.copy()
-        df = df.round(0)
-        # 使用需要的列，通常是高、低、收盘价
-        close = df["close"]    
-        low = df["low"]
-        open= df['open']
-        high = df["high"]
-        volume = df['volume']
+        # 创建一个数据副本
+        df = daily_data.copy()
 
-        #导入富时A50
-        data = pd.read_csv(r'D:\1.工作文件\0.数据库\另类数据\A50期货数据\CN0Y.SG.csv')
-        #导入中证全指
-        zzqz=pd.read_csv(r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d\000985.CSI.csv')
-        #日期
-        data['time'] = pd.to_datetime(data['time'])
-        zzqz['time'] = pd.to_datetime(zzqz['time'])
-        #self.df['time'] = pd.to_datetime(self.df['time'])
-        #按照时间升序排列
-        data= data.sort_values(by='time')
-        zzqz= zzqz.sort_values(by='time')
-        #计算涨跌幅
-        data['chg']=(data['ths_close_price_future']-data['ths_open_price_future'])/data['ths_open_price_future']
-        merged_df = pd.merge(zzqz, data[['time', 'chg']], left_on='time', right_on='time', how='left')
-        # 向下填充'value'列的NaN值
-        merged_df['chg'].fillna(method='ffill', inplace=True)
-        #计算富时A50及中证全指差值
-        merged_df['diff']=merged_df['chg']-(merged_df['close']-merged_df['open'])/merged_df['open']
-        #将中证全债及富时A50的差合并到df中
-        merged_df.set_index('time', inplace=True)   
+        # 计算唐奇安通道的上下轨
+        # 使用 .shift(1) 将 T0 排除在过去N日的计算范围之外
+        df['high_channel'] = df['high'].rolling(window=high_window).max().shift(1)
+        df['low_channel'] = df['low'].rolling(window=low_window).min().shift(1)
 
-        df = pd.merge(df, merged_df[['diff']], left_index=True, right_index=True, how='left')
+        # 计算短期和长期均线
+        df['ma_short'] = df['close'].rolling(window=ma_short).mean()
+        df['ma_long'] = df['close'].rolling(window=ma_long).mean()
 
+        # 添加信号列
+        def generate_signal(row):
+            # 检查是否满足做多条件
+            if row['close'] > row['high_channel'] and row['ma_short'] > row['ma_long']:
+                return 1
+            # 检查是否满足做空条件
+            elif row['close'] < row['low_channel']:
+                return -1
+            # 否则延续上一个信号
+            else:
+                return 0
 
-        df['var_1'] = df['diff']
-        df['var_2'] = window_1/1000
-        
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = -1
+        # 生成初始信号
+        df['raw_signal'] = df.apply(generate_signal, axis=1)
 
-        # pos为空的，向上填充数字
-        df['signal'].fillna(method='ffill', inplace=True)
+        # 延续上一个信号（避免0覆盖之前的信号）
+        df['signal'] = df['raw_signal'].replace(to_replace=0, method='ffill')
 
-        result=df
+        # 如果数据的第一个信号是空值，则填充为0
+        df['signal'].fillna(0, inplace=True)
+
         # 将信号合并回每日数据
-        daily_data = daily_data.join(result[['signal']], how='left')
+        daily_data = daily_data.join(df[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
-        daily_data=daily_data.dropna()
+        daily_data = daily_data.dropna()
 
         # 存储结果
         results[code] = daily_data
-        full_info[code]=result
+        full_info[code] = df
 
-    return results,full_info
-
+    return results, full_info
 # 自定义数据类，包含 'signal'
 class PandasDataPlusSignal(bt.feeds.PandasData):
     lines = ('signal',)
@@ -83,7 +81,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class DEMAKER_Strategy(bt.Strategy):
+class DonchianBreakout_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -208,10 +206,10 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
@@ -227,15 +225,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = DEMAKER(target_assets, paths)
+strategy_results,full_info = DonchianBreakout(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(DEMAKER_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(DonchianBreakout_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='DEMAKER_Strategy'
+strtegy_name='DonchianBreakout_Strategy'
 
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
@@ -355,8 +353,8 @@ parameter_grid = {
 # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=DEMAKER,
-#     strategy_class=DEMAKER_Strategy,
+#     strategy_function=DonchianBreakout,
+#     strategy_class=DonchianBreakout_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
