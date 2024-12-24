@@ -2043,10 +2043,10 @@ def Update_All(End_Date):
     return print('updating finished')
 
 
-Update_All('2024-12-23')
+Update_All('2024-12-24')
 
-# code_list=['000985.CSI']
+# code_list=['HSCE.HK']
 # Begin_Date='2003-01-01'
-# End_Date='2024-12-18'
-# path=r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据'
+# End_Date='2024-12-24'
+# path=r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d'
 # DUD.Downloading_Market_Vol_Price_Data(code_list,Begin_Date,End_Date,path)

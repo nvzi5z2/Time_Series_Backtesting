@@ -4,12 +4,12 @@ import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
 from itertools import product
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
 
-def UD(target_assets,paths,window_1=30,window_2=100):
+def SMA_H(target_assets, paths,window_1=61,window_2=101):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -20,62 +20,25 @@ def UD(target_assets,paths,window_1=30,window_2=100):
         # 读取数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
-
         df=daily_data.copy()
+        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+        hourly_data.index = pd.to_datetime(hourly_data.index)
 
-        #将上涨、平、下跌数量和涨跌停数量合并
-        up_down_path=paths['up_down']
-        up_down=pd.read_csv(up_down_path)
-        up_company_path=paths['up_companies']
-        data = pd.read_csv(up_company_path)
-        data=data.rename(columns={'p00112_f001':'time'})
-        up_down['time'] = pd.to_datetime(up_down['time'])
-        data['time'] = pd.to_datetime(data['time'])
-        num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
-        num_df.set_index('time', inplace=True)
-
-        #和指数数据合并
-        merged_df = pd.merge(df, num_df[['ths_limit_up_stock_num_sector','ths_limit_down_stock_num_sector','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+        hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
+        hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
+        # 添加信号列
+        hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
+        hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
         
-        #计算涨跌停剪刀差
-        merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
-        merged_df['涨停数量']=merged_df['ths_limit_up_stock_num_sector']
-        merged_df['跌停数量']=merged_df['ths_limit_down_stock_num_sector']
-        merged_df['涨跌停差']=(merged_df['涨停数量']-merged_df['跌停数量'])/merged_df['股票数量']
+        hourly_data['signal'].fillna(method='ffill', inplace=True)
+        hourly_exchange = hourly_data.resample('D').last()
 
-        # 计算AMA
-        merged_df['AMA_30'] = merged_df['涨跌停差'].ewm(window_1).mean()
-        merged_df['AMA_100'] = merged_df['涨跌停差'].ewm(window_2).mean()
-        merged_df['AMA']=merged_df['AMA_30']/merged_df['AMA_100']
+        df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+        df['signal'].fillna(method='ffill', inplace=True)
 
 
-        merged_df['ration']=merged_df['AMA']
-        # 确保merged_df的索引唯一
-        merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
-
-        df['var_1'] = merged_df['ration']
-        df['var_2'] = 1.15
-        df['var_3']=merged_df['AMA_30']
-        df['var_4']=merged_df['AMA_100']
-
-        # 根据条件生成信号值列
-        df['signal_1'] = -1  # 初始化信号列为 -1
-        condition = (df['var_1'] > df['var_2']) & (df['var_3'] > 0) & (df['var_4'] > 0)
-        df.loc[condition, 'signal_1'] = 1
-        
-        df['var_5'] = merged_df['涨跌停差']
-        df['var_6'] = -0.2
-        df['var_7']=0.019
-        # 根据条件生成信号值列
-        df.loc[(df["var_5"].shift(1) >= df["var_6"].shift(1)) & (df["var_5"] < df["var_6"]) , 'signal_2'] = 1
-        df.loc[(df["var_5"].shift(1) < df["var_7"].shift(1)) & (df["var_5"] >= df["var_7"]) , 'signal_2'] = -1
-        # pos为空的，向上填充数字
-        df['signal_2'].fillna(method='ffill', inplace=True)
-
-        df['signal_sum']=df['signal_1']+df['signal_2']
-        # 添加signal列，使用apply函数
-        df['signal'] = df['signal_sum'].apply(lambda x: 1 if x >= 0 else -1)
         result=df
+
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
@@ -95,9 +58,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UD_Strategy(bt.Strategy):
+class SMA_H_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -185,7 +148,7 @@ class UD_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -221,15 +184,14 @@ AT=Analyzing_Tools()
 # 定义数据路径
 paths = {
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
-    'up_down': r'D:\1.工作文件\0.数据库\另类数据\涨停跌停\001005010.csv',
-    'up_companies':r'D:\1.工作文件\0.数据库\另类数据\涨跌家数\A股.csv',
+    'hourly': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\15min',
     'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
 }
 
 
 # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",
@@ -240,32 +202,32 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UD(target_assets, paths)
+strategy_results,full_info = SMA_H(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(SMA_H_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UD_Strategy'
+strtegy_name='UDVD'
 
-#输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# 获取净值序列
 index_price_path=paths['daily']
 
+# 获取净值序列
 AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
-#蒙特卡洛分析
+#蒙特卡洛测试
 
-# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+
 
 
 #定义参数优化函数
@@ -297,29 +259,24 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        try:
-            print(f"正在测试参数组合：{params}")
-            # 生成当前参数下的信号
-            strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-            # 运行回测
-            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-            # 获取净值序列
-            pv = strat.get_net_value_series()
+        # 获取净值序列
+        pv = strat.get_net_value_series()
 
-            # 计算绩效指标
-            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-            # 收集指标和参数
-            result_entry = {k: v for k, v in params.items()}
-            result_entry.update(metrics)
-            result_entry=pd.DataFrame(result_entry)
-            results.append(result_entry)
-
-        except:
-
-            print(f"参数组合出现错误：{params}")
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
+        results.append(result_entry)
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -342,15 +299,11 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         param2 = param_names[1]
         pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
 
-        plt.figure(figsize=(15, 12))  # 调整图像大小
-        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis',
-                    annot_kws={"size": 8}, linewidths=0.5, linecolor='white')
-        plt.title(f'{metric} Heatmap', fontsize=16)
-        plt.ylabel(param1, fontsize=14)
-        plt.xlabel(param2, fontsize=14)
-        plt.xticks(rotation=45)
-        plt.yticks(rotation=0)
-        plt.tight_layout()  # 自动调整布局
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+        plt.title(f'{metric} Heatmap')
+        plt.ylabel(param1)
+        plt.xlabel(param2)
         plt.show()
     else:
         print("无法可视化超过两个参数的结果，请减少参数数量。")
@@ -358,22 +311,21 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
-
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100,10),
-    'window_2':range(10,100,10),
+    'window_1': range(50, 80,5),
+    'window_2': range(80, 110, 5)
 }
 
-# # # 运行参数优化
+# 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
-#     strategy_function=UD,
-#     strategy_class=UD_Strategy,
+#     strategy_function=SMA_H,
+#     strategy_class=SMA_H_Strategy,
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
-#     commission=0.0005,
+#     commission=0.0002,
 #     slippage_perc=0.0005,
 #     metric='sharpe_ratio'
 # )

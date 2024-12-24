@@ -6,10 +6,10 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
+import talib
 import numpy as np
 
-
-def UD(target_assets,paths,window_1=30,window_2=100):
+def FS(target_assets,paths,window_1=25):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -22,59 +22,40 @@ def UD(target_assets,paths,window_1=30,window_2=100):
         daily_data.index = pd.to_datetime(daily_data.index)
 
         df=daily_data.copy()
+        df = df.round(0)
+        # 使用需要的列，通常是高、低、收盘价
+        close = df["close"]    
+        low = df["low"]
+        open= df['open']
+        high = df["high"]
+        volume = df['volume']
 
-        #将上涨、平、下跌数量和涨跌停数量合并
-        up_down_path=paths['up_down']
-        up_down=pd.read_csv(up_down_path)
-        up_company_path=paths['up_companies']
-        data = pd.read_csv(up_company_path)
-        data=data.rename(columns={'p00112_f001':'time'})
-        up_down['time'] = pd.to_datetime(up_down['time'])
+        #导入富时A50
+        data = pd.read_csv(r'D:\1.工作文件\0.数据库\另类数据\A50期货数据\CN0Y.SG.csv')
         data['time'] = pd.to_datetime(data['time'])
-        num_df = pd.merge(up_down, data[['p00112_f002', 'p00112_f003', 'p00112_f004', 'time']], on='time', how='left')        
-        num_df.set_index('time', inplace=True)
+        #按照时间升序排列
+        data= data.sort_values(by='time')
+        #计算涨跌幅
+        data['chg']=(data['ths_close_price_future']-data['ths_open_price_future'])/data['ths_open_price_future']
 
-        #和指数数据合并
-        merged_df = pd.merge(df, num_df[['ths_limit_up_stock_num_sector','ths_limit_down_stock_num_sector','p00112_f002', 'p00112_f003', 'p00112_f004']], left_index=True, right_index=True, how='left')        
+        data.set_index('time', inplace=True)   
+
+        df = pd.merge(df, data[['chg']], left_index=True, right_index=True, how='left')
+
+        # 向下填充'value'列的NaN值
+        df['chg'].fillna(method='ffill', inplace=True)
+        #计算富时A50及中证全指差值
+        df['diff']=df['chg']-(df['close']-df['open'])/df['open']
+
+        df['var_1'] = df['diff']
+        df['var_2'] = window_1/1000
         
-        #计算涨跌停剪刀差
-        merged_df['股票数量']=merged_df['p00112_f002'] +  merged_df['p00112_f003'] + merged_df['p00112_f004']
-        merged_df['涨停数量']=merged_df['ths_limit_up_stock_num_sector']
-        merged_df['跌停数量']=merged_df['ths_limit_down_stock_num_sector']
-        merged_df['涨跌停差']=(merged_df['涨停数量']-merged_df['跌停数量'])/merged_df['股票数量']
+        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
+        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]) , 'signal'] = -1
 
-        # 计算AMA
-        merged_df['AMA_30'] = merged_df['涨跌停差'].ewm(window_1).mean()
-        merged_df['AMA_100'] = merged_df['涨跌停差'].ewm(window_2).mean()
-        merged_df['AMA']=merged_df['AMA_30']/merged_df['AMA_100']
-
-
-        merged_df['ration']=merged_df['AMA']
-        # 确保merged_df的索引唯一
-        merged_df = merged_df[~merged_df.index.duplicated(keep='first')]
-
-        df['var_1'] = merged_df['ration']
-        df['var_2'] = 1.15
-        df['var_3']=merged_df['AMA_30']
-        df['var_4']=merged_df['AMA_100']
-
-        # 根据条件生成信号值列
-        df['signal_1'] = -1  # 初始化信号列为 -1
-        condition = (df['var_1'] > df['var_2']) & (df['var_3'] > 0) & (df['var_4'] > 0)
-        df.loc[condition, 'signal_1'] = 1
-        
-        df['var_5'] = merged_df['涨跌停差']
-        df['var_6'] = -0.2
-        df['var_7']=0.019
-        # 根据条件生成信号值列
-        df.loc[(df["var_5"].shift(1) >= df["var_6"].shift(1)) & (df["var_5"] < df["var_6"]) , 'signal_2'] = 1
-        df.loc[(df["var_5"].shift(1) < df["var_7"].shift(1)) & (df["var_5"] >= df["var_7"]) , 'signal_2'] = -1
         # pos为空的，向上填充数字
-        df['signal_2'].fillna(method='ffill', inplace=True)
+        df['signal'].fillna(method='ffill', inplace=True)
 
-        df['signal_sum']=df['signal_1']+df['signal_2']
-        # 添加signal列，使用apply函数
-        df['signal'] = df['signal_sum'].apply(lambda x: 1 if x >= 0 else -1)
         result=df
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
@@ -95,9 +76,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UD_Strategy(bt.Strategy):
+class FS_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -221,15 +202,14 @@ AT=Analyzing_Tools()
 # 定义数据路径
 paths = {
     'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
-    'up_down': r'D:\1.工作文件\0.数据库\另类数据\涨停跌停\001005010.csv',
-    'up_companies':r'D:\1.工作文件\0.数据库\另类数据\涨跌家数\A股.csv',
+    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
     'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
 }
 
 
 # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",
@@ -240,17 +220,17 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UD(target_assets, paths)
+strategy_results,full_info = FS(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(FS_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UD_Strategy'
+strtegy_name='FS_Strategy'
 
-#输出策略净值
+
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
@@ -265,7 +245,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-# AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+#AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
@@ -361,19 +341,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100,10),
-    'window_2':range(10,100,10),
+    'window_1': range(5, 80,1),
+    #'window_2':range(0,3,5),
 }
 
 # # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=UD,
-#     strategy_class=UD_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=FS,
+    strategy_class=FS_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0005,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)
