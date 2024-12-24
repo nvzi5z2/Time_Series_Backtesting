@@ -132,7 +132,7 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2024-12-17'
+        self.Begin_Date='2019-01-04'
 
         self.current_position={'000300.SH':23576.50,
                 "000852.SH":23110.50,
@@ -370,15 +370,15 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'E:\数据库\另类数据\ETF期权数据',
-            'EDB':r'E:\数据库\同花顺EDB数据',
-            'new_HL': r'E:\数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'E:\数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'E:\数据库\另类数据\涨停跌停\001005010.csv',
-            'A50': r'E:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\数据库\同花顺EDB数据',
+            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
+            'A50': r'D:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
             #'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
         }
         # 定义选择的资产
@@ -1144,14 +1144,14 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0625, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0625, 'name': 'Alligator', 'datas': Alligator_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0625, 'name': 'V_MACD', 'datas': V_MACD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'PCR', 'datas': PCR_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.25, 'name': 'high_low', 'datas': high_low_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0625, 'name': 'UD', 'datas': UD_reults}
-    # {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.05625, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.05625, 'name': 'Alligator', 'datas': Alligator_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'PCR', 'datas': PCR_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'high_low', 'datas': high_low_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'UD', 'datas': UD_reults},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
 # 运行组合回测
@@ -1176,7 +1176,7 @@ tools.Strategies_Corr_and_NV(pf_nv)
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-23'
+T0_Date='2024-12-24'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 

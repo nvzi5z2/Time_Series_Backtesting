@@ -6,73 +6,39 @@ from analyzing_tools import Analyzing_Tools
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
-def DonchianBreakout(target_assets, paths, high_window=20, low_window=20, ma_short=25, ma_long=350):
-    """
-    唐奇安通道突破策略（修正版本）
-    :param target_assets: 股票代码列表
-    :param paths: 数据路径字典，包含'daily'路径
-    :param high_window: 计算过去N日（不包含T0日）最高价的窗口
-    :param low_window: 计算过去N日（不包含T0日）最低价的窗口
-    :param ma_short: 短期均线窗口
-    :param ma_long: 长期均线窗口
-    :return: 策略信号和完整数据
-    """
-    # 信号结果字典
+def LLT(target_assets, paths,window_1=20,window_2=40):
+    #信号结果字典
     results = {}
-    # 全数据字典，包含计算指标用于检查
-    full_info = {}
-
-    # 编写策略主体部分
+    #全数据字典，包含计算指标用于检查
+    full_info={}
+    
+    #编写策略主体部分
     for code in target_assets:
         # 读取数据
-        daily_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
 
-        # 创建一个数据副本
-        df = daily_data.copy()
-
-        # 计算唐奇安通道的上下轨
-        # 使用 .shift(1) 将 T0 排除在过去N日的计算范围之外
-        df['high_channel'] = df['high'].rolling(window=high_window).max().shift(1)
-        df['low_channel'] = df['low'].rolling(window=low_window).min().shift(1)
-
-        # 计算短期和长期均线
-        df['ma_short'] = df['close'].rolling(window=ma_short).mean()
-        df['ma_long'] = df['close'].rolling(window=ma_long).mean()
-
+        df=daily_data.copy()
+        # 计算
+        df["short"] = df['close'].ewm(window_1,adjust=False).mean()
+        df["long"] = df['close'].ewm(window_2, adjust=False).mean()
         # 添加信号列
-        def generate_signal(row):
-            # 检查是否满足做多条件
-            if row['close'] > row['high_channel'] and row['ma_short'] > row['ma_long']:
-                return 1
-            # 检查是否满足做空条件
-            elif row['close'] < row['low_channel']:
-                return -1
-            # 否则延续上一个信号
-            else:
-                return 0
-
-        # 生成初始信号
-        df['raw_signal'] = df.apply(generate_signal, axis=1)
-
-        # 延续上一个信号（避免0覆盖之前的信号）
-        df['signal'] = df['raw_signal'].replace(to_replace=0, method='ffill')
-
-        # 如果数据的第一个信号是空值，则填充为0
-        df['signal'].fillna(0, inplace=True)
-
+        df['diff']=df['short']-df['long']
+        # 添加signal列，使用apply函数
+        df['signal'] = df['diff'].apply(lambda x: 1 if x > 0 else -1)
+        result=df
         # 将信号合并回每日数据
-        daily_data = daily_data.join(df[['signal']], how='left')
+        daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
-        daily_data = daily_data.dropna()
+        daily_data=daily_data.dropna()
 
         # 存储结果
         results[code] = daily_data
-        full_info[code] = df
+        full_info[code]=result
 
-    return results, full_info
+    return results,full_info
+
 # 自定义数据类，包含 'signal'
 class PandasDataPlusSignal(bt.feeds.PandasData):
     lines = ('signal',)
@@ -81,9 +47,9 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class DonchianBreakout_Strategy(bt.Strategy):
+class EMA_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.19),  # 每个资产的仓位百分比
+        ('size_pct',0.16),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -225,16 +191,16 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = DonchianBreakout(target_assets, paths)
+strategy_results,full_info = EMA(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(DonchianBreakout_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(EMA_Strategy,target_assets,strategy_results,10000000,0,0)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='DonchianBreakout_Strategy'
-
+#输出策略净值
+strtegy_name='EMA'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
@@ -250,7 +216,7 @@ debug_df = strat.get_debug_df()
 
 #蒙特卡洛分析
 
-#AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
 
 
 #定义参数优化函数
@@ -304,7 +270,7 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
         except:
 
-            print(f"参数组合出现错误：{params}")
+            printprint(f"参数组合出现错误：{params}")
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -346,19 +312,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(5, 50,1),
-    #'window_2':range(0,3,5),
+    'window_1': range(10, 101,10),
+    'window_2':range(20,201,10),
 }
 
-# # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=DonchianBreakout,
-#     strategy_class=DonchianBreakout_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+# # 运行参数优化
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=EMA,
+    strategy_class=EMA_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0005,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)
