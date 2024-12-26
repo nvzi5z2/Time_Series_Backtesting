@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def SMA_H(target_assets, paths,window_1=61,window_2=101):
+def SMA_M(target_assets, paths,window_1=250,window_2=370):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -21,21 +21,21 @@ def SMA_H(target_assets, paths,window_1=61,window_2=101):
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
         df=daily_data.copy()
-        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
-        hourly_data.index = pd.to_datetime(hourly_data.index)
+        min_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
+        min_data.index = pd.to_datetime(min_data.index)
 
-        hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
-        hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
+        min_data["var_1"] = min_data['close'].rolling(window_1).mean()
+        min_data["var_2"] =min_data['close'].rolling(window_2).mean()
         # 添加信号列
-        hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
-        hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+        min_data.loc[(min_data["var_1"].shift(1) <= min_data["var_2"].shift(1)) & (min_data["var_1"] >= min_data["var_2"]) , 'signal'] = 1
+        min_data.loc[(min_data["var_1"].shift(1) > min_data["var_2"].shift(1)) & (min_data["var_1"] < min_data["var_2"]) , 'signal'] = -1
         
-        hourly_data['signal'].fillna(method='ffill', inplace=True)
-        hourly_exchange = hourly_data.resample('D').last()
+        min_data['signal'].fillna(method='ffill', inplace=True)
+        min_exchange = min_data.resample('D').sum()
 
-        df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+        df = pd.merge(df, min_exchange[['signal']], left_index=True, right_index=True, how='left')        
+        df['signal'] = df['signal'].apply(lambda x: 1 if x > 0 else -1)
         df['signal'].fillna(method='ffill', inplace=True)
-
 
         result=df
 
@@ -58,7 +58,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class SMA_H_Strategy(bt.Strategy):
+class SMA_M_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -202,15 +202,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = SMA_H(target_assets, paths)
+strategy_results,full_info = SMA_M(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(SMA_H_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(SMA_M_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UDVD'
+strtegy_name='SMA_M'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
@@ -312,20 +312,20 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     return results_df
 
 # 定义参数网格
-parameter_grid = {
-    'window_1': range(50, 80,5),
-    'window_2': range(80, 110, 5)
-}
+# parameter_grid = {
+#     'window_1': range(220, 300,10),
+#     'window_2': range(360, 430, 10)
+# }
 
-# 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=SMA_H,
-    strategy_class=SMA_H_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# # 运行参数优化
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=SMA_M,
+#     strategy_class=SMA_M_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0002,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )

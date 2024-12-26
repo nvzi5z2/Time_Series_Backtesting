@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def SMA_H(target_assets, paths,window_1=61,window_2=101):
+def SMA_H(target_assets, paths,window_1=150,window_2=140):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -21,19 +21,29 @@ def SMA_H(target_assets, paths,window_1=61,window_2=101):
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
         df=daily_data.copy()
-        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
-        hourly_data.index = pd.to_datetime(hourly_data.index)
+        min_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
+        min_data.index = pd.to_datetime(min_data.index)
+        close = min_data["close"]
+        # 使用 talib 计算 ADX
+        # 计算EMA1  
+        ema1 = close.ewm(window_1, adjust=False).mean()  
+    
+        # 计算EMA2  
+        ema2 = ema1.ewm(window_1, adjust=False).mean()  
+    
+        # 计算EMA3  
+        TRIPLE_EMA = ema2.ewm(window_1, adjust=False).mean() 
+        min_data["var_1"] = (TRIPLE_EMA - TRIPLE_EMA.shift(1)) / TRIPLE_EMA.shift(1)
+        min_data["var_2"] = min_data["var_1"].ewm(window_2, adjust=False).mean()
 
-        hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
-        hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
         # 添加信号列
-        hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
-        hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+        min_data.loc[(min_data["var_1"].shift(1) <= min_data["var_2"].shift(1)) & (min_data["var_1"] >= min_data["var_2"]) , 'signal'] = 1
+        min_data.loc[(min_data["var_1"].shift(1) > min_data["var_2"].shift(1)) & (min_data["var_1"] < min_data["var_2"]) , 'signal'] = -1
         
-        hourly_data['signal'].fillna(method='ffill', inplace=True)
-        hourly_exchange = hourly_data.resample('D').last()
+        min_data['signal'].fillna(method='ffill', inplace=True)
+        min_exchange = min_data.resample('D').last()
 
-        df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+        df = pd.merge(df, min_exchange[['signal']], left_index=True, right_index=True, how='left')        
         df['signal'].fillna(method='ffill', inplace=True)
 
 
@@ -313,19 +323,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(50, 80,5),
-    'window_2': range(80, 110, 5)
+    'window_1': range(110, 190,10),
+    'window_2': range(70, 230,10)
 }
 
 # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=SMA_H,
-    strategy_class=SMA_H_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=SMA_H,
+#     strategy_class=SMA_H_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0002,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )

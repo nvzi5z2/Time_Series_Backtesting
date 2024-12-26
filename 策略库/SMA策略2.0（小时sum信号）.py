@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def UDVD(target_assets, paths,window_1=71,window_2=101):
+def SMA_H(target_assets, paths,window_1=61,window_2=101):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -20,7 +20,6 @@ def UDVD(target_assets, paths,window_1=71,window_2=101):
         # 读取数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
-        daily_data=daily_data.loc["2019-01-04":,:]
         df=daily_data.copy()
         hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
         hourly_data.index = pd.to_datetime(hourly_data.index)
@@ -59,7 +58,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class UDVD_Strategy(bt.Strategy):
+class SMA_H_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -203,15 +202,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = UDVD(target_assets, paths)
+strategy_results,full_info = SMA_H(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(UDVD_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(SMA_H_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UDVD'
+strtegy_name='SMA_H'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
@@ -314,19 +313,19 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 100, 10),
-    'window_2': range(50, 150, 10)
+    'window_1': range(50, 80, 5),
+    'window_2': range(80, 110, 5)
 }
 
 # 运行参数优化
-results_df = parameter_optimization(
-    parameter_grid=parameter_grid,
-    strategy_function=UDVD,
-    strategy_class=UDVD_Strategy,
-    target_assets=target_assets,
-    paths=paths,
-    cash=10000000,
-    commission=0.0002,
-    slippage_perc=0.0005,
-    metric='sharpe_ratio'
-)
+# results_df = parameter_optimization(
+#     parameter_grid=parameter_grid,
+#     strategy_function=SMA_H,
+#     strategy_class=SMA_H_Strategy,
+#     target_assets=target_assets,
+#     paths=paths,
+#     cash=10000000,
+#     commission=0.0002,
+#     slippage_perc=0.0005,
+#     metric='sharpe_ratio'
+# )
