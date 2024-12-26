@@ -135,12 +135,12 @@ class Tools:
 
         self.Begin_Date='2019-01-04'
 
-        self.current_position={'000300.SH':23576.50,
-                "000852.SH":23110.50,
-                '000905.SH':22968,
-                "399006.SZ":22972.90,
-                '399303.SZ':23062.53,
-                'cash':882620.94}
+        self.current_position={'000300.SH':23844.90,
+                "000852.SH":10282.80,
+                '000905.SH':10978.60,
+                "399006.SZ":23197.90,
+                '399303.SZ':10210.00,
+                'cash':920657.8}
 
         self.ETF_code={'000300.SH':'510310.SH',
                 "000852.SH":"159845.SZ",
@@ -409,29 +409,16 @@ class Strategies:
     def __init__(self):
         # 定义数据路径
         self.paths = {
-<<<<<<< HEAD
-            'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'D:\1.工作文件\0.数据库\另类数据\ETF期权数据',
-            'EDB':r'D:\1.工作文件\0.数据库\同花顺EDB数据',
-            'new_HL': r'D:\1.工作文件\0.数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'D:\1.工作文件\0.数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'D:\1.工作文件\0.数据库\另类数据\涨停跌停\001005010.csv',
-            'A50': r'D:\1.工作文件\0.数据库\另类数据\A50期货数据\CN0Y.SG.csv',
+            'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+            'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
+            'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
+            'option': r'D:\数据库\另类数据\ETF期权数据',
+            'EDB':r'D:\数据库\同花顺EDB数据',
+            'new_HL': r'D:\数据库\另类数据\新高新低\001005010.csv',
+            'up_companies':r'D:\数据库\另类数据\涨跌家数\A股.csv',
+            'up_down': r'D:\数据库\另类数据\涨停跌停\001005010.csv',
+            'A50': r'D:\数据库\另类数据\A50数据\CN0Y.SG.csv',
             #'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
-=======
-            'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-            'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
-            'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
-            'option': r'E:\数据库\另类数据\ETF期权数据',
-            'EDB':r'E:\数据库\同花顺EDB数据',
-            'new_HL': r'E:\数据库\另类数据\新高新低\001005010.csv',
-            'up_companies':r'E:\数据库\另类数据\涨跌家数\A股.csv',
-            'up_down': r'E:\数据库\另类数据\涨停跌停\001005010.csv',
-            'A50': r'E:\数据库\另类数据\A50期货数据\CN0Y.SG.csv',
-            #'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
->>>>>>> origin/main
         }
         # 定义选择的资产
         self.target_assets = ["000300.SH","000852.SH",
@@ -847,7 +834,7 @@ class Strategies:
 
     #宏观类策略
 
-    def Inventory_Cycle(self,window_1=10):
+    def Inventory_Cycle(self,window_1=7):
         #PMI：原材料库存代码=M002043811
         #BCI:企业库存前瞻指数=M004488064 
 
@@ -855,9 +842,9 @@ class Strategies:
         results = {}
         #全数据字典，包含计算指标用于检查
         full_info={}
-
         target_assets=self.target_assets
         paths=self.paths
+        
         #编写策略主体部分
         for code in target_assets:
             # 读取数据量价数据
@@ -873,44 +860,54 @@ class Strategies:
             PMI_Inventory_value=PMI_Inventory_value.sort_index()
             #计算第一个信号（PMI原材料库存信号）
 
-            #处理极值和zscore化
-            def process_macro_data(data, column_name):
+            def process_macro_data_rolling(data, column_name, window=36):
                 """
-                对输入的宏观数据进行极端值处理和Zscore标准化处理
+                对输入的宏观数据进行滚动极端值处理和Zscore标准化处理（基于滚动窗口）。
 
                 参数：
                 data : pd.DataFrame
-                    包含待处理数据的DataFrame
+                    包含待处理数据的DataFrame。
                 column_name : str
-                    需要处理的列名
-
+                    需要处理的列名。
+                window : int
+                    滚动窗口的大小（默认为36列）。
+                
                 返回：
                 pd.DataFrame
-                    包含处理后数据的DataFrame，新增列为 {column_name}_Zscore
+                    包含处理后数据的DataFrame，新增列为 {column_name}_Zscore。
                 """
                 # 确保列存在
                 if column_name not in data.columns:
                     raise ValueError(f"列名 {column_name} 不存在于输入数据中")
-                
-                # 计算均值和标准差
-                mean = data[column_name].mean()
-                std = data[column_name].std()
 
-                # 定义上下限
-                upper_limit = mean + 3 * std
-                lower_limit = mean - 3 * std
-
-                # 极端值处理
-                data[column_name] = data[column_name].clip(lower=lower_limit, upper=upper_limit)
-
-                # Zscore标准化处理
+                # 初始化新列
                 zscore_column_name = f"{column_name}_Zscore"
-                data[zscore_column_name] = (data[column_name] - mean) / std
+                data[zscore_column_name] = np.nan
 
-                return data[[column_name+'_Zscore']]
+                # 滚动窗口计算
+                for i in range(window - 1, len(data)):
+                    # 提取过去window列的数据
+                    rolling_window = data[column_name].iloc[i - window + 1:i + 1]
+
+                    # 计算滚动均值和标准差
+                    mean = rolling_window.mean()
+                    std = rolling_window.std()
+
+                    # 定义上下限
+                    upper_limit = mean + 3 * std
+                    lower_limit = mean - 3 * std
+
+                    # 当前值进行极端值处理
+                    current_value = data[column_name].iloc[i]
+                    clipped_value = np.clip(current_value, lower_limit, upper_limit)
+
+                    # 计算Zscore并赋值
+                    data.loc[data.index[i], zscore_column_name] = (clipped_value - mean) / std
+                    data.dropna()
+
+                return data[['PMI_Inventory_Index_Zscore']]
             
-            PMI_Inventory_Index_Zscore=process_macro_data(PMI_Inventory_value,'PMI_Inventory_Index')
-            PMI_Inventory_Index_Zscore=PMI_Inventory_Index_Zscore.loc["2012-06-01":,:]
+            PMI_Inventory_Index_Zscore=process_macro_data_rolling(PMI_Inventory_value,'PMI_Inventory_Index')
             #输出PMI的信号
             multiplier=window_1/10
         
@@ -1220,7 +1217,6 @@ tools=Tools()
 
 #趋势类
 UDVD_results,_= strategies_instance.UDVD()
-Alligator_results,_ = strategies_instance.Alligator_strategy_with_Ao_and_Fractal_Macd()
 V_MACD_results,_ = strategies_instance.V_MACD()
 SMA_H_results,_=strategies_instance.SMA_H()
 
@@ -1242,13 +1238,13 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.05625, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'SMA_H', 'datas': SMA_H_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'V_MACD', 'datas': V_MACD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.05625, 'name': 'UD', 'datas': UD_reults},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'PCR', 'datas': PCR_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.225, 'name': 'high_low', 'datas': high_low_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.0666, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0666, 'name': 'SMA_H', 'datas': SMA_H_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0666, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'UD', 'datas': UD_reults},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'PCR', 'datas': PCR_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'high_low', 'datas': high_low_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
@@ -1271,12 +1267,12 @@ AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns,
 
 Corr=tools.Strategies_Corr_and_NV(pf_nv)
 
-# tools.set_clusters(Corr,5)
+tools.set_clusters(Corr,6)
 
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-24'
+T0_Date='2024-12-26'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
