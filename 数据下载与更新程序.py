@@ -2039,17 +2039,42 @@ def Update_All(End_Date):
 #海外数据第二天更新
 def Update_Oversea_Data(End_Date):
 
+<<<<<<< HEAD
     A50_Path=r'D:\1.工作文件\0.数据库\另类数据\A50期货数据'
+=======
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+Update_All('2024-12-24')
+
+# code_list=['HSCE.HK']
+# Begin_Date='2003-01-01'
+# End_Date='2024-12-24'
+# path=r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1d'
+# DUD.Downloading_Market_Vol_Price_Data(code_list,Begin_Date,End_Date,path)
+=======
+    A50_Path=r'E:\数据库\另类数据\A50期货数据'
+=======
+    A50_Path=r'D:\数据库\另类数据\A50期货数据'
+>>>>>>> Stashed changes
+>>>>>>> origin/main
 
     DUD.Updating_A50_Futures_Data(End_Date,A50_Path)
 
     return print('海外数据更新完毕')
 
+# Update_Oversea_Data('2024-12-23')
 
+<<<<<<< HEAD
 Update_All('2024-12-26')
 
 #Update_Oversea_Data('2024-12-25')
 # Code_List=['CN0Y.SG']
+=======
+Update_All('2024-12-24')
+
+<<<<<<< Updated upstream
+Code_List=['CN0Y.SG']
+>>>>>>> origin/main
 
 # Begin_Date='2016-10-28'
 
@@ -2057,4 +2082,11 @@ Update_All('2024-12-26')
 
 # Path=r'E:\数据库\另类数据\A50期货数据'
 
+<<<<<<< HEAD
 # DUD.Downloading_A50_Futures_Data(Code_List,Begin_Date,End_Date,Path)
+=======
+DUD.Downloading_A50_Futures_Data(Code_List,Begin_Date,End_Date,Path)
+>>>>>>> origin/main
+=======
+>>>>>>> Stashed changes
+>>>>>>> origin/main

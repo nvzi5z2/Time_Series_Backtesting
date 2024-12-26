@@ -1,65 +1,57 @@
 你是一名专业的量化投资经理，请你根据我提供的策略编写的案例，参考我编写策略的框架，帮我编写新的策略。
 
 1.背景：
-目前我有一个策略名为鳄鱼线策略，具体的策略已经通过python编写完成了。我现在想要优化这个策略，在现在这个策略的基础上优化。
+目前我有一个策略名为LLT策略，具体的策略已经通过python编写完成了。我现在想要优化这个策略，在现在这个策略的基础上优化。
 我的所有策略最后都会得到一个信号列，名为signal。我将所有策略都分为了看多、看空、无信号三种状态，分别用1，-1，0来代表。
 
-目前我的鳄鱼线的代码如下：“def alligator_strategy(target_assets, paths):
-    #信号结果字典
-    results = {}
-    #全数据字典，包含计算指标用于检查
-    full_info={}
-    
-    #编写策略主体部分
-    for code in target_assets:
-        # 读取数据
-        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
-        daily_data.index = pd.to_datetime(daily_data.index)
-        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
-        hourly_data.index = pd.to_datetime(hourly_data.index)
-        mins_15_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
-        mins_15_data.index = pd.to_datetime(mins_15_data.index)
-        mins_15_data = mins_15_data[~mins_15_data.index.duplicated(keep='first')]
+目前我的LLT的代码如下：“def strategy(df,window):
 
-        # 提取收盘价
-        daily_data_close = daily_data[['close']]
-        hourly_data_close = hourly_data[['close']]
-        mins_15_data_close = mins_15_data[['close']]
+    def LLT(df,Day):
 
-        # 计算鳄鱼线指标
-        Jaw = daily_data_close.rolling(window=13).mean().shift(8)
-        Teeth = hourly_data_close.rolling(window=8).mean().shift(5)
-        Lips = mins_15_data_close.rolling(window=5).mean().shift(3)
+            df_series=df.iloc[:,0]
 
-        # 合并数据
-        combined = pd.concat([daily_data_close, Jaw, Teeth, Lips], axis=1)
-        combined.columns = ['Close', 'Jaw', 'Teeth', 'Lips']
-        combined.fillna(method='ffill', inplace=True)
-        result = combined.resample('D').last()
-        result.dropna(inplace=True)
+            #计算LLT指标
+            llt=df_series.copy()
 
-        # 生成交易信号
-        def signal_generation(row):
-            if row['Lips'] > row['Teeth'] > row['Jaw']:
-                return 1  # 多头信号
-            elif row['Lips'] < row['Teeth'] < row['Jaw']:
-                return -1  # 空头信号
-            else:
-                return 0  # 无信号
+            alpha=2/(Day+1)
 
-        result['signal'] = result.apply(signal_generation, axis=1)
+            for i in range(2,len(df_series)):
 
+                llt[i]=(alpha-(alpha**2)/4)*df_series[i]+((alpha**2)/2)*df_series[i-1]-\
+                        (alpha-(3*(alpha**2))/4)*df_series[i-2]+2*(1-alpha)*llt[i-1]-((1-alpha)**2)*llt[i-2]
 
-        # 将信号合并回每日数据
-        daily_data = daily_data.join(result[['signal']], how='left')
-        daily_data[['signal']].fillna(0, inplace=True)
-        daily_data=daily_data.dropna()
+            result=df.copy()
 
-        # 存储结果
-        results[code] = daily_data
-        full_info[code]=result
+            result.loc[:,"LLT"]=llt
 
-    return results,full_info”
+            def Caculate_Slope(Close_Price_Data):
+
+                LLT_Series=Close_Price_Data.loc[:,"LLT"]
+
+                Slopes=[]
+
+                for i in range(0,len(LLT_Series)):
+
+                    Slope=(LLT_Series[i]/LLT_Series[i-1])-1
+
+                    Slopes.append(Slope)
+                return Slopes
+
+            LLT_Slope=Caculate_Slope(result)
+
+            return result
+    close=df[['close']]
+    LLT=LLT(close,window)
+    df['LLT']=LLT['LLT']
+    df['slope']=df['LLT'].pct_change()
+    df['signal'] = df['slope'].apply(lambda x: 1 if x > 0 else 0)
+    df['pos'] = df['signal'].shift()
+    # pos为空的，向上填充数字
+    df['pos'].fillna(method='ffill', inplace=True)
+    # 将初始行数的pos补全为0
+    df['pos'].fillna(0, inplace=True) 
+
+    return df ”
 
 
 要求：

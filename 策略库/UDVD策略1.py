@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def UDVD(target_assets, paths,window_1=34):
+def UDVD(target_assets, paths,window_1=27):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -60,7 +60,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class UDVD_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -183,16 +183,15 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
-    'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
-    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'hourly': r'E:\数据库\同花顺ETF跟踪指数量价数据\1h',
+    'min15': r'E:\数据库\同花顺ETF跟踪指数量价数据\15min',
+    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 
 }
 
 # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",
@@ -314,10 +313,10 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
 
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(10, 101, 10),
+    'window_1': range(20, 42, 1),
 }
 
-# 运行参数优化
+# # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=UDVD,
@@ -325,7 +324,7 @@ parameter_grid = {
 #     target_assets=target_assets,
 #     paths=paths,
 #     cash=10000000,
-#     commission=0.0002,
+#     commission=0.0005,
 #     slippage_perc=0.0005,
 #     metric='sharpe_ratio'
 # )
