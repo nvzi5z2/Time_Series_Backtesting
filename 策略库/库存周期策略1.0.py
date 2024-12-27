@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-def Inventory_Cycle(target_assets,paths,window_1=10):
+def Inventory_Cycle(target_assets,paths,window_1=7):
     #PMI：原材料库存代码=M002043811
     #BCI:企业库存前瞻指数=M004488064 
 
@@ -32,44 +32,54 @@ def Inventory_Cycle(target_assets,paths,window_1=10):
         PMI_Inventory_value=PMI_Inventory_value.sort_index()
         #计算第一个信号（PMI原材料库存信号）
 
-        #处理极值和zscore化
-        def process_macro_data(data, column_name):
+        def process_macro_data_rolling(data, column_name, window=36):
             """
-            对输入的宏观数据进行极端值处理和Zscore标准化处理
+            对输入的宏观数据进行滚动极端值处理和Zscore标准化处理（基于滚动窗口）。
 
             参数：
             data : pd.DataFrame
-                包含待处理数据的DataFrame
+                包含待处理数据的DataFrame。
             column_name : str
-                需要处理的列名
-
+                需要处理的列名。
+            window : int
+                滚动窗口的大小（默认为36列）。
+            
             返回：
             pd.DataFrame
-                包含处理后数据的DataFrame，新增列为 {column_name}_Zscore
+                包含处理后数据的DataFrame，新增列为 {column_name}_Zscore。
             """
             # 确保列存在
             if column_name not in data.columns:
                 raise ValueError(f"列名 {column_name} 不存在于输入数据中")
-            
-            # 计算均值和标准差
-            mean = data[column_name].mean()
-            std = data[column_name].std()
 
-            # 定义上下限
-            upper_limit = mean + 3 * std
-            lower_limit = mean - 3 * std
-
-            # 极端值处理
-            data[column_name] = data[column_name].clip(lower=lower_limit, upper=upper_limit)
-
-            # Zscore标准化处理
+            # 初始化新列
             zscore_column_name = f"{column_name}_Zscore"
-            data[zscore_column_name] = (data[column_name] - mean) / std
+            data[zscore_column_name] = np.nan
 
-            return data[[column_name+'_Zscore']]
+            # 滚动窗口计算
+            for i in range(window - 1, len(data)):
+                # 提取过去window列的数据
+                rolling_window = data[column_name].iloc[i - window + 1:i + 1]
+
+                # 计算滚动均值和标准差
+                mean = rolling_window.mean()
+                std = rolling_window.std()
+
+                # 定义上下限
+                upper_limit = mean + 3 * std
+                lower_limit = mean - 3 * std
+
+                # 当前值进行极端值处理
+                current_value = data[column_name].iloc[i]
+                clipped_value = np.clip(current_value, lower_limit, upper_limit)
+
+                # 计算Zscore并赋值
+                data.loc[data.index[i], zscore_column_name] = (clipped_value - mean) / std
+                data.dropna()
+
+            return data[['PMI_Inventory_Index_Zscore']]
         
-        PMI_Inventory_Index_Zscore=process_macro_data(PMI_Inventory_value,'PMI_Inventory_Index')
-        PMI_Inventory_Index_Zscore=PMI_Inventory_Index_Zscore.loc["2012-06-01":,:]
+        PMI_Inventory_Index_Zscore=process_macro_data_rolling(PMI_Inventory_value,'PMI_Inventory_Index')
         #输出PMI的信号
         multiplier=window_1/10
        
@@ -163,7 +173,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class Inventory_Cycle_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -286,21 +296,26 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'EDB':r'E:\数据库\同花顺EDB数据',
-    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'EDB':r'D:\数据库\同花顺EDB数据',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 
 # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",
     "399006.SZ",
     "399303.SZ"
 ]
+
+# # 资产列表
+# target_assets = [
+#     "000300.SH",
+#     "000905.SH",
+# ]
 
 
 # 生成信号
@@ -428,7 +443,7 @@ parameter_grid = {
     'window_1': range(5, 21,1)
 }
 
-# # # 运行参数优化
+# # # # 运行参数优化
 # results_df = parameter_optimization(
 #     parameter_grid=parameter_grid,
 #     strategy_function=Inventory_Cycle,

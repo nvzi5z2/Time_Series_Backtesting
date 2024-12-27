@@ -44,42 +44,54 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
         #计算第一个信号（PMI原材料库存信号）
 
         #处理极值和zscore化
-        def process_macro_data(data, column_name):
+        def process_macro_data_rolling(data, column_name, window=36):
             """
-            对输入的宏观数据进行极端值处理和Zscore标准化处理
+            对输入的宏观数据进行滚动极端值处理和Zscore标准化处理（基于滚动窗口）。
 
             参数：
             data : pd.DataFrame
-                包含待处理数据的DataFrame
+                包含待处理数据的DataFrame。
             column_name : str
-                需要处理的列名
-
+                需要处理的列名。
+            window : int
+                滚动窗口的大小（默认为36列）。
+            
             返回：
             pd.DataFrame
-                包含处理后数据的DataFrame，新增列为 {column_name}_Zscore
+                包含处理后数据的DataFrame，新增列为 {column_name}_Zscore。
             """
             # 确保列存在
             if column_name not in data.columns:
                 raise ValueError(f"列名 {column_name} 不存在于输入数据中")
-            
-            # 计算均值和标准差
-            mean = data[column_name].mean()
-            std = data[column_name].std()
 
-            # 定义上下限
-            upper_limit = mean + 3 * std
-            lower_limit = mean - 3 * std
-
-            # 极端值处理
-            data[column_name] = data[column_name].clip(lower=lower_limit, upper=upper_limit)
-
-            # Zscore标准化处理
+            # 初始化新列
             zscore_column_name = f"{column_name}_Zscore"
-            data[zscore_column_name] = (data[column_name] - mean) / std
+            data[zscore_column_name] = np.nan
 
-            return data[[column_name+'_Zscore']]
+            # 滚动窗口计算
+            for i in range(window - 1, len(data)):
+                # 提取过去window列的数据
+                rolling_window = data[column_name].iloc[i - window + 1:i + 1]
+
+                # 计算滚动均值和标准差
+                mean = rolling_window.mean()
+                std = rolling_window.std()
+
+                # 定义上下限
+                upper_limit = mean + 3 * std
+                lower_limit = mean - 3 * std
+
+                # 当前值进行极端值处理
+                current_value = data[column_name].iloc[i]
+                clipped_value = np.clip(current_value, lower_limit, upper_limit)
+
+                # 计算Zscore并赋值
+                data.loc[data.index[i], zscore_column_name] = (clipped_value - mean) / std
+                data.dropna()
+
+            return data[['PMI_Inventory_Index_Zscore']]
         
-        PMI_Inventory_Index_Zscore=process_macro_data(Inventory_merged_df,'PMI_Inventory_Index')
+        PMI_Inventory_Index_Zscore=process_macro_data_rolling(PMI_Inventory_value,'PMI_Inventory_Index')
         
         #输出PMI的信号
         multiplier=window_1/10
@@ -124,7 +136,7 @@ def Inventory_Cycle(target_assets,paths,window_1=8):
                     elif data[column_name].iloc[i] < lower_bound.iloc[i]:
                         signals.append(1)  # 看多信号
                     else:
-                        signals.append(0)  # 维持上一个信号
+                        signals.append(signals[-1])  # 维持上一个信号
 
             # 将信号加入数据框
             data['Signal'] = signals
@@ -320,9 +332,9 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'E:\数据库\同花顺ETF跟踪指数量价数据\1d',
-    'EDB':r'E:\数据库\同花顺EDB数据',
-    'pv_export':r"E:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据\1d',
+    'EDB':r'D:\数据库\同花顺EDB数据',
+    'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
 }
 
 

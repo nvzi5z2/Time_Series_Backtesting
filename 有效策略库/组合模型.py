@@ -1238,13 +1238,13 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0666, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0666, 'name': 'SMA_H', 'datas': SMA_H_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0666, 'name': 'V_MACD', 'datas': V_MACD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'UD', 'datas': UD_reults},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'PCR', 'datas': PCR_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.20, 'name': 'high_low', 'datas': high_low_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.0945, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.101, 'name': 'SMA_H', 'datas': SMA_H_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0864, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.1507, 'name': 'UD', 'datas': UD_reults},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.1816, 'name': 'PCR', 'datas': PCR_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.07816, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.2076, 'name': 'high_low', 'datas': high_low_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
@@ -1267,7 +1267,7 @@ AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns,
 
 Corr=tools.Strategies_Corr_and_NV(pf_nv)
 
-tools.set_clusters(Corr,6)
+tools.set_clusters(Corr,5)
 
 
 #信号处理和目标仓位生成
@@ -1276,3 +1276,9 @@ T0_Date='2024-12-26'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
+
+#所有子策略表现输出
+
+export_path=r'D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\组合模型\子策略净值'
+
+# pf_nv.to_excel(export_path+'\\'+'风险平价组合.xlsx')
