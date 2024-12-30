@@ -4,12 +4,12 @@ import backtrader as bt
 import matplotlib.pyplot as plt
 from analyzing_tools import Analyzing_Tools
 from itertools import product
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import talib
 import numpy as np
 
-def TII(target_assets,paths,window_1=35,window_2=25):
+def TII_M(target_assets, paths,window_1=410,window_2=470):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -20,45 +20,48 @@ def TII(target_assets,paths,window_1=35,window_2=25):
         # 读取数据
         daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
         daily_data.index = pd.to_datetime(daily_data.index)
-
         df=daily_data.copy()
-
-        # 计算M
+        min_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
+        min_data.index = pd.to_datetime(min_data.index)
+        close = min_data["close"]
         m1 = int((window_1 / 2) + 1)
 
         # 计算移动平均线
-        df['close_ma'] = df['close'].rolling(window_1).mean()
+        min_data['close_ma'] = min_data['close'].rolling(window_1).mean()
 
         # 计算偏离值
-        df['dev'] = df['close'] - df['close_ma']
+        min_data['dev'] = min_data['close'] - min_data['close_ma']
 
         # 计算正向偏离值和负向偏离值
-        df['devpos'] = np.where(df['dev'] > 0, df['dev'], 0)
-        df['devneg'] = np.where(df['dev'] < 0, -df['dev'], 0)
-        df['devpos'] = pd.Series(df['devpos'])
-        df['devneg'] = pd.Series(df['devneg'])
+        min_data['devpos'] = np.where(min_data['dev'] > 0, min_data['dev'], 0)
+        min_data['devneg'] = np.where(min_data['dev'] < 0, -min_data['dev'], 0)
+        min_data['devpos'] = pd.Series(min_data['devpos'])
+        min_data['devneg'] = pd.Series(min_data['devneg'])
         # 计算正向偏离值和负向偏离值的累积和
-        df['sumpos'] = df['devpos'].rolling(m1).sum()
-        df['sumneg'] = df['devneg'].rolling(m1).sum()
+        min_data['sumpos'] = min_data['devpos'].rolling(m1).sum()
+        min_data['sumneg'] = min_data['devneg'].rolling(m1).sum()
 
         # 计算TII指标
-        df['tii'] = 100 * df['sumpos'] / (df['sumpos'] + df['sumneg'])
+        min_data['tii'] = 100 * min_data['sumpos'] / (min_data['sumpos'] + min_data['sumneg'])
 
         # 计算TII信号线
-        df['tii_signal'] = df['tii'].ewm(window_2, adjust=False).mean()
+        min_data['tii_signal'] = min_data['tii'].ewm(window_2, adjust=False).mean()
 
-        # 计算
-        df["var_1"] = df['tii']
-        df["var_2"] = df['tii_signal']
+        min_data["var_1"] = min_data['tii']
+        min_data["var_2"] = min_data['tii_signal']
+        # 添加信号列
+        min_data.loc[(min_data["var_1"].shift(1) <= min_data["var_2"].shift(1)) & (min_data["var_1"] >= min_data["var_2"]) , 'signal'] = 1
+        min_data.loc[(min_data["var_1"].shift(1) > min_data["var_2"].shift(1)) & (min_data["var_1"] < min_data["var_2"]) , 'signal'] = -1
+        
+        min_data['signal'].fillna(method='ffill', inplace=True)
+        min_exchange = min_data.resample('D').last()
 
-        # 信号触发条件
-        df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] > df["var_2"]) , 'signal'] = 1
-        df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] <= df["var_2"]), 'signal'] = -1
-
-        # pos为空的，向上填充数字
+        df = pd.merge(df, min_exchange[['signal']], left_index=True, right_index=True, how='left')        
         df['signal'].fillna(method='ffill', inplace=True)
 
+
         result=df
+
         # 将信号合并回每日数据
         daily_data = daily_data.join(result[['signal']], how='left')
         daily_data[['signal']].fillna(0, inplace=True)
@@ -78,7 +81,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class TII_Strategy(bt.Strategy):
+class TII_M_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -168,7 +171,7 @@ class TII_Strategy(bt.Strategy):
         return df
 
 
-def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0002, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
+def run_backtest(strategy, target_assets, strategy_results, cash=100000.0, commission=0.0005, slippage_perc=0.0005, slippage_fixed=None, **kwargs):
     
     cerebro = bt.Cerebro()  # 初始化Cerebro引擎
     cerebro.addstrategy(strategy, **kwargs)  # 添加策略
@@ -207,7 +210,6 @@ paths = {
     'hourly': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据\15min',
     'pv_export':r"D:\1.工作文件\程序\3.策略净值序列"
-
 }
 
 
@@ -223,32 +225,32 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = TII(target_assets, paths)
+strategy_results,full_info = TII_M(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(TII_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(TII_M_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='TII_Strategy'
+strtegy_name='TII_M'
 
-#输出策略净值
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
 portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(pv, freq='D')
 
-# 获取净值序列
 index_price_path=paths['daily']
 
+# 获取净值序列
 AT.plot_results('000906.SH',index_price_path,portfolio_value, drawdown_ts, returns, metrics)
 
 # 获取调试信息
 debug_df = strat.get_debug_df()
 
-#蒙特卡洛分析
+#蒙特卡洛测试
 
 AT.monte_carlo_analysis(strat,num_simulations=10000,num_days=252,freq='D')
+
 
 
 #定义参数优化函数
@@ -280,29 +282,24 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     results = []
 
     for params in param_combinations:
-        try:
-            print(f"正在测试参数组合：{params}")
-            # 生成当前参数下的信号
-            strategy_results, full_info = strategy_function(target_assets, paths, **params)
+        print(f"正在测试参数组合：{params}")
+        # 生成当前参数下的信号
+        strategy_results, full_info = strategy_function(target_assets, paths, **params)
 
-            # 运行回测
-            strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
+        # 运行回测
+        strat = run_backtest(strategy_class, target_assets, strategy_results, cash, commission, slippage_perc)
 
-            # 获取净值序列
-            pv = strat.get_net_value_series()
+        # 获取净值序列
+        pv = strat.get_net_value_series()
 
-            # 计算绩效指标
-            portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
+        # 计算绩效指标
+        portfolio_value, returns, drawdown_ts, metrics =AT.performance_analysis(pv)
 
-            # 收集指标和参数
-            result_entry = {k: v for k, v in params.items()}
-            result_entry.update(metrics)
-            result_entry=pd.DataFrame(result_entry)
-            results.append(result_entry)
-
-        except:
-
-            print(f"参数组合出现错误：{params}")
+        # 收集指标和参数
+        result_entry = {k: v for k, v in params.items()}
+        result_entry.update(metrics)
+        result_entry=pd.DataFrame(result_entry)
+        results.append(result_entry)
 
     # 将结果转换为 DataFrame
     results_df = pd.concat(results,axis=0)
@@ -325,15 +322,11 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
         param2 = param_names[1]
         pivot_table = results_df.pivot(index=param1, columns=param2, values=metric)
 
-        plt.figure(figsize=(15, 12))  # 调整图像大小
-        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis',
-                    annot_kws={"size": 8}, linewidths=0.5, linecolor='white')
-        plt.title(f'{metric} Heatmap', fontsize=16)
-        plt.ylabel(param1, fontsize=14)
-        plt.xlabel(param2, fontsize=14)
-        plt.xticks(rotation=45)
-        plt.yticks(rotation=0)
-        plt.tight_layout()  # 自动调整布局
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(pivot_table, annot=True, fmt=".4f", cmap='viridis')
+        plt.title(f'{metric} Heatmap')
+        plt.ylabel(param1)
+        plt.xlabel(param2)
         plt.show()
     else:
         print("无法可视化超过两个参数的结果，请减少参数数量。")
@@ -341,22 +334,21 @@ def parameter_optimization(parameter_grid, strategy_function, strategy_class, ta
     # 返回结果 DataFrame
     return results_df
 
-
 # 定义参数网格
 parameter_grid = {
-    'window_1': range(20, 60,5),
-    'window_2':range(5,40,5),
+    'window_1': range(390, 460,10),
+    'window_2': range(300, 500,10)
 }
 
-# # # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=TII,
-#     strategy_class=TII_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0005,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+# 运行参数优化
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=TII_M,
+    strategy_class=TII_M_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0002,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)

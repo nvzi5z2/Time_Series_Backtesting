@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def SMA_H(target_assets, paths,window_1=150,window_2=140):
+def TRIX_M(target_assets, paths,window_1=150,window_2=140):
     #信号结果字典
     results = {}
     #全数据字典，包含计算指标用于检查
@@ -68,7 +68,7 @@ class PandasDataPlusSignal(bt.feeds.PandasData):
     )
 
 # 策略类，包含调试信息和导出方法
-class SMA_H_Strategy(bt.Strategy):
+class TRIX_M_Strategy(bt.Strategy):
     params = (
         ('size_pct',0.19),  # 每个资产的仓位百分比
     )
@@ -212,15 +212,15 @@ target_assets = [
 
 
 # 生成信号
-strategy_results,full_info = SMA_H(target_assets, paths)
+strategy_results,full_info = TRIX_M(target_assets, paths)
 
 
 # 获取策略实例
-strat = run_backtest(SMA_H_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
+strat = run_backtest(TRIX_M_Strategy,target_assets,strategy_results,10000000,0.0005,0.0005)
 
 pv=strat.get_net_value_series()
 
-strtegy_name='UDVD'
+strtegy_name='TRIX_M'
 
 pv.to_excel(paths["pv_export"]+'\\'+strtegy_name+'.xlsx')
 
@@ -328,14 +328,14 @@ parameter_grid = {
 }
 
 # 运行参数优化
-# results_df = parameter_optimization(
-#     parameter_grid=parameter_grid,
-#     strategy_function=SMA_H,
-#     strategy_class=SMA_H_Strategy,
-#     target_assets=target_assets,
-#     paths=paths,
-#     cash=10000000,
-#     commission=0.0002,
-#     slippage_perc=0.0005,
-#     metric='sharpe_ratio'
-# )
+results_df = parameter_optimization(
+    parameter_grid=parameter_grid,
+    strategy_function=TRIX_M,
+    strategy_class=TRIX_M_Strategy,
+    target_assets=target_assets,
+    paths=paths,
+    cash=10000000,
+    commission=0.0002,
+    slippage_perc=0.0005,
+    metric='sharpe_ratio'
+)
