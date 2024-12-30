@@ -21,7 +21,7 @@ def generate_synthetic_data(n=500, num_assets=5, seed=42):
         data[f"Asset_{i+1}"] = asset_data
     return data
 
-# 2. 因子构造（包含标准化）
+# 2. 因子构造（包含标准化和未来收益率计算）
 def construct_single_factor(data, lookback=5):
     """
     对所有标的构造单一因子（动量因子），并进行标准化。
@@ -37,14 +37,14 @@ def construct_single_factor(data, lookback=5):
             asset_data['Factor'] - asset_data['Factor'].rolling(lookback).mean()
         ) / asset_data['Factor'].rolling(lookback).std()
         
-        # 构造未来收益率
-        for i in range(1, 31):  # 未来 1 到 30 天的收益率
-            asset_data[f'FutureReturn_{i}'] = asset_data['Return'].shift(-i)
+        # 构造未来 1 到 30 天的累积收益率
+        for i in range(1, 31):  # 从未来 1 天到未来 30 天
+            # 使用价格计算未来的累积对数收益率
+            asset_data[f'FutureReturn_{i}'] = np.log(asset_data['Price'].shift(-i) / asset_data['Price'])
         
         # 更新数据，删除缺失值
         data[asset] = asset_data.dropna()
     return data
-
 # 3. 因子相关性分析
 def evaluate_correlation(data, factor_col='Factor_standardized'):
     """
@@ -138,7 +138,63 @@ def plot_correlation(all_correlations):
     plt.grid()
     plt.show()
 
+
+def perform_detailed_linear_regression(data, factor_col='Factor_standardized', future_return_col='FutureReturn_10'):
+    """
+    对因子和未来收益率进行线性回归，并返回详细统计指标。
+    
+    参数：
+    - data: dict，每个标的的数据（DataFrame）。
+    - factor_col: str，因子的列名。
+    - future_return_col: str，未来收益率的列名。
+    
+    返回：
+    - results_df: DataFrame，包含每个标的的回归结果，列包括斜率、截距、R²、t 值、p 值等。
+    """
+    results = []
+    for asset in data:
+        asset_data = data[asset]
+        # 确保数据中无缺失值
+        asset_data = asset_data[[factor_col, future_return_col]].dropna()
+        
+        # 因子值和未来收益率
+        X = sm.add_constant(asset_data[factor_col])  # 添加常数项（截距）
+        y = asset_data[future_return_col]
+
+        # 使用 statsmodels 进行线性回归
+        model = sm.OLS(y, X).fit()
+
+        # 提取回归结果
+        slope = model.params[factor_col]  # 斜率
+        intercept = model.params['const']  # 截距
+        r_squared = model.rsquared  # R²
+        f_stat = model.fvalue  # F 值
+        f_pval = model.f_pvalue  # F 值的 p 值
+        t_value = model.tvalues[factor_col]  # 斜率的 t 值
+        p_value = model.pvalues[factor_col]  # 斜率的 p 值
+        std_err = model.bse[factor_col]  # 斜率的标准误差
+        residual_std_err = model.mse_resid ** 0.5  # 残差标准误差
+
+        # 将结果保存到列表
+        results.append({
+            'Asset': asset,
+            'Slope': slope,
+            'Intercept': intercept,
+            'R²': r_squared,
+            'F-stat': f_stat,
+            'F_p-value': f_pval,
+            't-value': t_value,
+            'p-value': p_value,
+            'Std Err': std_err,
+            'Residual Std Err': residual_std_err
+        })
+    
+    # 转换为 DataFrame
+    results_df = pd.DataFrame(results)
+    return results_df
+
 # 主流程
+
 if __name__ == "__main__":
     # 1. 生成多个标的的数据
     data = generate_synthetic_data(n=500, num_assets=5)
@@ -168,3 +224,15 @@ if __name__ == "__main__":
     # 8. 增加自相关性检查
     print("\nChecking Autocorrelation:")
     check_autocorrelation(data, factor_col='Factor_standardized', lags=30)
+
+    # 9. 线性回归分析（详细统计结果）
+    print("\nPerforming Detailed Linear Regression Analysis:")
+    future_return_col = 'FutureReturn_10'  # 使用未来 10 天的累积收益率
+    detailed_regression_results = perform_detailed_linear_regression(data, factor_col='Factor_standardized', future_return_col=future_return_col)
+    
+    # 打印线性回归结果表格
+    print("\nDetailed Linear Regression Results:")
+    print(detailed_regression_results)
+    
+    # 保存结果为 CSV 文件（可选）
+    # detailed_regression_results.to_csv("detailed_regression_results.csv", index=False)
