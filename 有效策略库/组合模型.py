@@ -135,12 +135,12 @@ class Tools:
 
         self.Begin_Date='2019-01-04'
 
-        self.current_position={'000300.SH':23844.90,
-                "000852.SH":10282.80,
-                '000905.SH':10978.60,
-                "399006.SZ":23197.90,
-                '399303.SZ':10210.00,
-                'cash':920657.8}
+        self.current_position={'000300.SH':51823.20,
+                "000852.SH":32038.40,
+                '000905.SH':31977.60,
+                "399006.SZ":51647.90,
+                '399303.SZ':31654.00,
+                'cash':800538.1}
 
         self.ETF_code={'000300.SH':'510310.SH',
                 "000852.SH":"159845.SZ",
@@ -1272,7 +1272,7 @@ tools.set_clusters(Corr,5)
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-26'
+T0_Date='2024-12-27'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
