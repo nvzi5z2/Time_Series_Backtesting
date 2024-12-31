@@ -133,14 +133,14 @@ class Tools:
 
     def __init__(self):
 
-        self.Begin_Date='2019-01-04'
+        self.Begin_Date='2024-12-17'
 
-        self.current_position={'000300.SH':51823.20,
-                "000852.SH":32038.40,
-                '000905.SH':31977.60,
-                "399006.SZ":51647.90,
-                '399303.SZ':31654.00,
-                'cash':800538.1}
+        self.current_position={'000300.SH':51796.80,
+                "000852.SH":32076.80,
+                '000905.SH':31986.60,
+                "399006.SZ":51743.90,
+                '399303.SZ':31713.10,
+                'cash':800545.3}
 
         self.ETF_code={'000300.SH':'510310.SH',
                 "000852.SH":"159845.SZ",
@@ -322,10 +322,13 @@ class Tools:
         index_code_list=index_code[:-1]
         etf_close_price=[]
         for code in index_code_list:
-            etf=ETF_code[code]
-            close=THS_HQ(etf,'close','',T0_Date,T0_Date).data
-            close_price=close["close"].values[0]
-            etf_close_price.append(close_price)
+            try:
+                etf=ETF_code[code]
+                close=THS_HQ(etf,'close','',T0_Date,T0_Date).data
+                close_price=close["close"].values[0]
+                etf_close_price.append(close_price)
+            except:
+                print(code+'数据提取错误')
         etf_close_price.append(0)
         result.loc[:,"etf_close_price"]=etf_close_price
         result.loc[:,"adjusted_shares"]=result.loc[:,"adjusted_value"]/result.loc[:,"etf_close_price"]
@@ -437,36 +440,41 @@ class Strategies:
 
         # 编写策略主体部分
         for code in target_assets:
-            # 读取数据
-            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
-            daily_data.index = pd.to_datetime(daily_data.index)
-            df=daily_data.copy()
-            close = df["close"]
-            open = df['open']    
-            low = df["low"]
-            high = df["high"]
-            volume = df['volume']
-            # 计算
-            volup = (high-open)/open
-            voldown = (open-low)/open
-            ud= volup - voldown
+            try:
+                # 读取数据
+                daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+                daily_data.index = pd.to_datetime(daily_data.index)
+                df=daily_data.copy()
+                close = df["close"]
+                open = df['open']    
+                low = df["low"]
+                high = df["high"]
+                volume = df['volume']
+                # 计算
+                volup = (high-open)/open
+                voldown = (open-low)/open
+                ud= volup - voldown
 
-            df["var_1"] = ud.rolling(window_1).mean()
-            df["var_2"] =0
-            # 添加信号列
-            df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] >= df["var_2"]) , 'signal'] = 1
-            df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = -1
-            df['signal'].fillna(method='ffill', inplace=True)
-            result=df
+                df["var_1"] = ud.rolling(window_1).mean()
+                df["var_2"] =0
+                # 添加信号列
+                df.loc[(df["var_1"].shift(1) <= df["var_2"].shift(1)) & (df["var_1"] >= df["var_2"]) , 'signal'] = 1
+                df.loc[(df["var_1"].shift(1) > df["var_2"].shift(1)) & (df["var_1"] < df["var_2"]) , 'signal'] = -1
+                df['signal'].fillna(method='ffill', inplace=True)
+                result=df
 
-            # 将信号合并回每日数据
-            daily_data = daily_data.join(result[['signal']], how='left')
-            daily_data[['signal']].fillna(0, inplace=True)
-            daily_data=daily_data.dropna()
+                # 将信号合并回每日数据
+                daily_data = daily_data.join(result[['signal']], how='left')
+                daily_data[['signal']].fillna(0, inplace=True)
+                daily_data=daily_data.dropna()
 
-            # 存储结果
-            results[code] = daily_data
-            full_info[code]=result
+                # 存储结果
+                results[code] = daily_data
+                full_info[code]=result
+
+            except:
+
+                print(code+'出现错误')
 
         return results,full_info
 
@@ -1265,14 +1273,14 @@ portfolio_value, returns, drawdown_ts, metrics = AT.performance_analysis(Portfol
 
 AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns, metrics)
 
-Corr=tools.Strategies_Corr_and_NV(pf_nv)
+# Corr=tools.Strategies_Corr_and_NV(pf_nv)
 
-tools.set_clusters(Corr,5)
+# tools.set_clusters(Corr,5)
 
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-27'
+T0_Date='2024-12-30'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
