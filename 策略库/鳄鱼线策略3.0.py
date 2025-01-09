@@ -13,6 +13,13 @@ def alligator_strategy_with_ao_and_fractal_macd(target_assets, paths):
 
     for code in target_assets:
         # 读取数据
+        daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+        daily_data.index = pd.to_datetime(daily_data.index)
+        hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+        hourly_data.index = pd.to_datetime(hourly_data.index)
+        mins_15_data = pd.read_csv(os.path.join(paths['min15'], f"{code}.csv"), index_col=[0])
+        mins_15_data.index = pd.to_datetime(mins_15_data.index)
+        mins_15_data = mins_15_data[~mins_15_data.index.duplicated(keep='first')]
 
 
         # 提取收盘价
@@ -206,7 +213,7 @@ class PandasDataPlussignal(bt.feeds.PandasData):
 # 策略类，包含调试信息和导出方法
 class Alligator_Strategy(bt.Strategy):
     params = (
-        ('size_pct',0.16),  # 每个资产的仓位百分比
+        ('size_pct',0.19),  # 每个资产的仓位百分比
     )
 
     def __init__(self):
@@ -327,7 +334,7 @@ AT=Analyzing_Tools()
 
 # 定义数据路径
 paths = {
-    'daily': r'D:\1.工作文件\0.数据库\同花顺ETF跟踪指数量价数据',
+    'daily': r'D:\数据库\同花顺ETF跟踪指数量价数据',
     'hourly': r'D:\数据库\同花顺ETF跟踪指数量价数据\1h',
     'min15': r'D:\数据库\同花顺ETF跟踪指数量价数据\15min',
     'pv_export':r"D:\量化交易构建\私募基金研究\股票策略研究\策略净值序列"
@@ -335,7 +342,6 @@ paths = {
 
 # # 资产列表
 target_assets = [
-    "000016.SH",
     "000300.SH",
     "000852.SH",
     "000905.SH",

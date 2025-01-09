@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 def thslogindemo():
     # 输入用户的帐号和密码
-    thsLogin = THS_iFinDLogin("hwqh100","155d50")
+    thsLogin = THS_iFinDLogin("hwqh101","95df1a")
     print(thsLogin)
     if thsLogin != 0:
         print('登录失败')
@@ -2045,7 +2045,7 @@ def Update_Oversea_Data(End_Date):
 
     return print('海外数据更新完毕')
 
-Update_Oversea_Data('2024-12-30')
+Update_Oversea_Data('2025-01-08')
 
-Update_All('2024-12-30')
+Update_All('2025-01-08')
 

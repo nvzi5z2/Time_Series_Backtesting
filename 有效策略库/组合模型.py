@@ -10,7 +10,7 @@ from iFinDPy import *
 
 def thslogindemo():
     # 输入用户的帐号和密码
-    thsLogin = THS_iFinDLogin("hwqh100","155d50")
+    thsLogin = THS_iFinDLogin("hwqh101","95df1a")
     print(thsLogin)
     if thsLogin != 0:
         print('登录失败')
@@ -135,12 +135,12 @@ class Tools:
 
         self.Begin_Date='2024-12-17'
 
-        self.current_position={'000300.SH':51796.80,
-                "000852.SH":32076.80,
-                '000905.SH':31986.60,
-                "399006.SZ":51743.90,
-                '399303.SZ':31713.10,
-                'cash':800545.3}
+        self.current_position={'000300.SH':0.00,
+                "000852.SH":0.0,
+                '000905.SH':0.0,
+                "399006.SZ":0.0,
+                '399303.SZ':0.0,
+                'cash':985565}
 
         self.ETF_code={'000300.SH':'510310.SH',
                 "000852.SH":"159845.SZ",
@@ -478,6 +478,142 @@ class Strategies:
 
         return results,full_info
 
+    def ADTM_H(self,window_1=94,window_2=1):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+        
+        target_assets=self.target_assets
+
+        paths=self.paths
+
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+            df=daily_data.copy()
+            hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+            hourly_data.index = pd.to_datetime(hourly_data.index)
+            open = hourly_data['open']    
+            low = hourly_data["low"]
+            high = hourly_data["high"]
+            
+            # 计算 DTM
+            hourly_data['DTM'] = np.where(open > open.shift(1), np.maximum(high - open, open - open.shift(1)), 0)
+
+            # 计算 DBM
+            hourly_data['DBM'] = np.where(open < open.shift(1), np.maximum(open - low, open.shift(1) - open), 0)
+
+            # 计算 STM
+            hourly_data['STM'] = hourly_data['DTM'].rolling(window_1).sum()
+
+            # 计算 SBM
+            hourly_data['SBM'] = hourly_data['DBM'].rolling(window_1).sum()
+
+            # 计算 ADTM
+            hourly_data['ADTM'] = (hourly_data['STM'] - hourly_data['SBM']) / np.maximum(hourly_data['STM'], hourly_data['SBM'])
+            
+            #   计算
+            hourly_data["var_1"] =hourly_data['ADTM'] 
+            hourly_data["var_2"] =window_2/10
+            hourly_data['var_3']=-window_2/10
+
+            # 添加信号列
+            hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] > hourly_data["var_2"]) , 'signal'] = 1
+            hourly_data.loc[(hourly_data["var_1"].shift(1) >= hourly_data["var_3"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_3"]) , 'signal'] = -1
+            
+            hourly_data['signal'].fillna(method='ffill', inplace=True)
+            hourly_exchange = hourly_data.resample('D').last()
+
+            df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+            df['signal'].fillna(method='ffill', inplace=True)
+
+
+            result=df
+
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
+
+    def TII_H(self,window_1=100,window_2=120):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+   
+        target_assets=self.target_assets
+
+        paths=self.paths
+
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+            df=daily_data.copy()
+            hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+            hourly_data.index = pd.to_datetime(hourly_data.index)
+            close = hourly_data["close"]
+            # 计算M
+            m1 = int((window_1 / 2) + 1)
+
+            # 计算移动平均线
+            hourly_data['close_ma'] = hourly_data['close'].rolling(window_1).mean()
+
+            # 计算偏离值
+            hourly_data['dev'] = hourly_data['close'] - hourly_data['close_ma']
+
+            # 计算正向偏离值和负向偏离值
+            hourly_data['devpos'] = np.where(hourly_data['dev'] > 0, hourly_data['dev'], 0)
+            hourly_data['devneg'] = np.where(hourly_data['dev'] < 0, -hourly_data['dev'], 0)
+            hourly_data['devpos'] = pd.Series(hourly_data['devpos'])
+            hourly_data['devneg'] = pd.Series(hourly_data['devneg'])
+            # 计算正向偏离值和负向偏离值的累积和
+            hourly_data['sumpos'] = hourly_data['devpos'].rolling(m1).sum()
+            hourly_data['sumneg'] = hourly_data['devneg'].rolling(m1).sum()
+
+            # 计算TII指标
+            hourly_data['tii'] = 100 * hourly_data['sumpos'] / (hourly_data['sumpos'] + hourly_data['sumneg'])
+
+            # 计算TII信号线
+            hourly_data['tii_signal'] = hourly_data['tii'].ewm(window_2, adjust=False).mean()
+
+            hourly_data["var_1"] = hourly_data['tii']
+            hourly_data["var_2"] = hourly_data['tii_signal']
+
+            # 添加信号列
+            hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
+            hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+            
+            hourly_data['signal'].fillna(method='ffill', inplace=True)
+            hourly_exchange = hourly_data.resample('D').last()
+
+            df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+            df['signal'].fillna(method='ffill', inplace=True)
+
+
+            result=df
+
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
+
     #均线类策略
     def Alligator_strategy_with_Ao_and_Fractal_Macd(self):
         # 信号结果字典
@@ -707,6 +843,57 @@ class Strategies:
 
             hourly_data["var_1"] = hourly_data['close'].rolling(window_1).mean()
             hourly_data["var_2"] =hourly_data['close'].rolling(window_2).mean()
+            # 添加信号列
+            hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
+            hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
+            
+            hourly_data['signal'].fillna(method='ffill', inplace=True)
+            hourly_exchange = hourly_data.resample('D').last()
+
+            df = pd.merge(df, hourly_exchange[['signal']], left_index=True, right_index=True, how='left')        
+            df['signal'].fillna(method='ffill', inplace=True)
+
+
+            result=df
+
+            # 将信号合并回每日数据
+            daily_data = daily_data.join(result[['signal']], how='left')
+            daily_data[['signal']].fillna(0, inplace=True)
+            daily_data=daily_data.dropna()
+
+            # 存储结果
+            results[code] = daily_data
+            full_info[code]=result
+
+        return results,full_info
+
+    def TRIX_H(target_assets, paths,window_1=50,window_2=5):
+        #信号结果字典
+        results = {}
+        #全数据字典，包含计算指标用于检查
+        full_info={}
+        
+        #编写策略主体部分
+        for code in target_assets:
+            # 读取数据
+            daily_data = pd.read_csv(os.path.join(paths['daily'], f"{code}.csv"), index_col=[0])
+            daily_data.index = pd.to_datetime(daily_data.index)
+            df=daily_data.copy()
+            hourly_data = pd.read_csv(os.path.join(paths['hourly'], f"{code}.csv"), index_col=[0])
+            hourly_data.index = pd.to_datetime(hourly_data.index)
+            close = hourly_data["close"]
+            # 使用 talib 计算 ADX
+            # 计算EMA1  
+            ema1 = close.ewm(window_1, adjust=False).mean()  
+        
+            # 计算EMA2  
+            ema2 = ema1.ewm(window_1, adjust=False).mean()  
+        
+            # 计算EMA3  
+            TRIPLE_EMA = ema2.ewm(window_1, adjust=False).mean() 
+            hourly_data["var_1"] = (TRIPLE_EMA - TRIPLE_EMA.shift(1)) / TRIPLE_EMA.shift(1)
+            hourly_data["var_2"] = hourly_data["var_1"].ewm(window_2, adjust=False).mean()
+
             # 添加信号列
             hourly_data.loc[(hourly_data["var_1"].shift(1) <= hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] >= hourly_data["var_2"]) , 'signal'] = 1
             hourly_data.loc[(hourly_data["var_1"].shift(1) > hourly_data["var_2"].shift(1)) & (hourly_data["var_1"] < hourly_data["var_2"]) , 'signal'] = -1
@@ -1227,12 +1414,14 @@ tools=Tools()
 UDVD_results,_= strategies_instance.UDVD()
 V_MACD_results,_ = strategies_instance.V_MACD()
 SMA_H_results,_=strategies_instance.SMA_H()
-
+ADTM_H_results,_=strategies_instance.ADTM_H()
+TII_H_results,_=strategies_instance.TII_H()
+Alligator_results,_=strategies_instance.Alligator_strategy_with_Ao_and_Fractal_Macd()
 #期权类
 PCR_results,_=strategies_instance.PCR()
 
 #宏观类
-Inventory_Cycle_results,_=strategies_instance.Inventory_Cycle()
+Inventory_Cycle_results,IC=strategies_instance.Inventory_Cycle()
 
 #情绪类
 high_low_results,_=strategies_instance.high_low()
@@ -1246,13 +1435,13 @@ Adding_Signal = PandasDataPlusSignal
 
 # 定义策略和资金分配比例
 strategies_list = [
-    {'strategy': EqualWeightsStrategy, 'allocation': 0.0945, 'name': 'UDVD', 'datas': UDVD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.101, 'name': 'SMA_H', 'datas': SMA_H_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.0864, 'name': 'V_MACD', 'datas': V_MACD_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.1507, 'name': 'UD', 'datas': UD_reults},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.1816, 'name': 'PCR', 'datas': PCR_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.07816, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
-    {'strategy': EqualWeightsStrategy, 'allocation':0.2076, 'name': 'high_low', 'datas': high_low_results},
+    {'strategy': EqualWeightsStrategy, 'allocation': 0.0788, 'name': 'UDVD', 'datas': UDVD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0739, 'name': 'V_MACD', 'datas': V_MACD_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0879, 'name': 'ADTM_H', 'datas': ADTM_H_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.127, 'name': 'UD', 'datas': UD_reults},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.169, 'name': 'PCR', 'datas': PCR_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.0668, 'name': 'Inventory_Cycle', 'datas': Inventory_Cycle_results},
+    {'strategy': EqualWeightsStrategy, 'allocation':0.183, 'name': 'high_low', 'datas': high_low_results},
     {'strategy': EqualWeightsStrategy, 'allocation':0.10, 'name': 'FS_A50', 'datas': FS_A50_results}
     ]
 
@@ -1275,18 +1464,18 @@ AT.plot_results('000906.SH',index_price_path,Portfolio_nv, drawdown_ts, returns,
 
 # Corr=tools.Strategies_Corr_and_NV(pf_nv)
 
-# tools.set_clusters(Corr,5)
+# tools.set_clusters(Corr,4)
 
 
 #信号处理和目标仓位生成
 
-T0_Date='2024-12-30'
+T0_Date='2025-01-07'
 
 target_assets_position,difference=tools.caculate_signals_and_trades(debug_df,T0_Date)
 
 
 #所有子策略表现输出
 
-export_path=r'D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\组合模型\子策略净值'
+export_path=r'D:\量化交易构建\Time_Serires_Backtesting\Time_Series_Backtesting\组合模型\子策略净值'
 
-# pf_nv.to_excel(export_path+'\\'+'风险平价组合.xlsx')
+pf_nv.to_excel(export_path+'\\'+'子策略表现.xlsx')

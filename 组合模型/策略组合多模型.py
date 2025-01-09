@@ -59,12 +59,26 @@ class Portfolio_Model:
 
         return weights
    
+    def clean_data(strategy_path):
+        #读取数据
+        strategy_path=self.strategy_path
+        strategy_df=pd.read_excel(strategy_path,index_col=[0])
+        strategy_df.index=pd.to_datetime(strategy_df.index)
+
+        #净值归一
+        strategy_nv=strategy_df/strategy_df.iloc[0,:]
+
+        #剔除总组合净值
+        strategy_nv=strategy_nv.drop(columns=['Combined','FS_A50'])
+
+        return strategy_nv
 
 
 
 
 
-strategy_path=r'D:\量化交易构建\私募基金研究\股票策略研究\Time_Series_Backtesting\组合模型\子策略净值\子策略表现.xlsx'
+
+strategy_path=r'D:\量化交易构建\Time_Serires_Backtesting\Time_Series_Backtesting\组合模型\子策略净值\子策略表现.xlsx'
 
 
 
